@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "twitter-content-machine"
+version = "0.1.0"
+description = "Local terminal-first, draft-only X/Twitter content machine"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Nikita" }]
+dependencies = []
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.0"]
+test = ["pytest>=8"]
+
+[project.scripts]
+tw = "twitter_content_machine.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["twitter_content_machine*"]
