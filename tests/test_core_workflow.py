@@ -5,6 +5,7 @@ import sqlite3
 from pathlib import Path
 import shutil
 import json
+import zipfile
 
 import pytest
 
@@ -539,6 +540,105 @@ def test_smart_search_uses_codex_over_memory_candidates(
     assert (latest / "01_candidates.md").exists()
     assert (latest / "02_codex_request.md").exists()
     assert (latest / "03_codex_raw_output.md").exists()
+
+
+def test_style_gold_import_copies_style_and_content_gold(
+    tw_root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pack = tmp_path / "style_content_gold.zip"
+    with zipfile.ZipFile(pack, "w") as zf:
+        zf.writestr("style_gold.md", "# Style Gold\n\nstyle examples")
+        zf.writestr("content_gold.md", "# Content Gold\n\ncontent examples")
+    ensure_workspace()
+
+    assert run_cli(["style-gold-import", str(pack)]) == 0
+    output = capsys.readouterr().out
+
+    assert "style_gold.md" in output
+    assert (tw_root / "profile" / "style_gold.md").read_text(encoding="utf-8").startswith("# Style Gold")
+    assert (tw_root / "profile" / "content_gold.md").read_text(encoding="utf-8").startswith("# Content Gold")
+    assert (tw_root / "profile" / "style_content_gold_report.md").exists()
+
+
+def test_codex_prepare_from_active_draft_creates_content_session(
+    tw_root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = tmp_path / "codex-session-project"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# Coding Agent\n\nRun tests.\n", encoding="utf-8")
+    before = {p.relative_to(project) for p in project.rglob("*")}
+    ensure_workspace()
+    (tw_root / "profile" / "style_gold.md").write_text("# Style Gold\n\nstyle examples", encoding="utf-8")
+    (tw_root / "profile" / "content_gold.md").write_text("# Content Gold\n\ncontent examples", encoding="utf-8")
+    draft = create_draft("article note about validation leaks", "article-note", project, no_llm=True)
+
+    assert run_cli(["codex", "--prepare", "--thread"], cwd=project) == 0
+    output = capsys.readouterr().out
+
+    after = {p.relative_to(project) for p in project.rglob("*")}
+    assert before == after
+    session_dirs = list((tw_root / "codex_sessions").glob("*"))
+    assert session_dirs
+    session = sorted(session_dirs)[-1]
+    assert str(session) in output
+    assert (session / "AGENTS.md").exists()
+    assert (session / ".codex_home" / "AGENTS.md").exists()
+    assert (session / ".codex_home" / "config.toml").exists()
+    assert (session / "TASK.md").exists()
+    assert (session / "CONTEXT_BUNDLE.md").exists()
+    assert (session / "INPUT.md").exists()
+    assert (session / "OUTPUT_SCHEMA.md").exists()
+    assert (session / "output").is_dir()
+    assert (tw_root / "state" / "current_codex_session.txt").read_text(encoding="utf-8").strip() == str(session)
+    assert "article note about validation leaks" in (session / "INPUT.md").read_text(encoding="utf-8")
+    assert "Style Gold" in (session / "CONTEXT_BUNDLE.md").read_text(encoding="utf-8")
+    assert "Content Gold" in (session / "CONTEXT_BUNDLE.md").read_text(encoding="utf-8")
+    assert "Run tests" not in (session / "AGENTS.md").read_text(encoding="utf-8")
+    assert draft.id in (session / "TASK.md").read_text(encoding="utf-8")
+
+
+def test_codex_prepare_from_file_uses_file_as_input(
+    tw_root: Path, tmp_path: Path
+) -> None:
+    source = tmp_path / "article_notes.md"
+    source.write_text("# Notes\n\nThis article is about execution realism.", encoding="utf-8")
+    ensure_workspace()
+
+    assert run_cli(["codex", "--prepare", "--file", str(source), "--final-post"]) == 0
+
+    session = sorted((tw_root / "codex_sessions").glob("*"))[-1]
+    assert "execution realism" in (session / "INPUT.md").read_text(encoding="utf-8")
+    assert "final-post" in (session / "TASK.md").read_text(encoding="utf-8")
+
+
+def test_codex_run_invokes_codex_from_session_folder(
+    tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tmp_path / "run-codex-session"
+    project.mkdir()
+    ensure_workspace()
+    create_draft("small note about fills", "short", project, no_llm=True)
+    calls = []
+
+    class Completed:
+        returncode = 0
+
+    monkeypatch.setattr("twitter_content_machine.llm.shutil.which", lambda command: "C:/bin/codex.exe")
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return Completed()
+
+    monkeypatch.setattr("twitter_content_machine.codex_session.subprocess.run", fake_run)
+
+    assert run_cli(["codex", "--run"], cwd=project) == 0
+
+    assert calls
+    command, kwargs = calls[0]
+    session = Path(kwargs["cwd"])
+    assert command == ["C:/bin/codex.exe"]
+    assert session.parent == tw_root / "codex_sessions"
+    assert kwargs["env"]["CODEX_HOME"] == str(session / ".codex_home")
 
 
 def test_algo_review_media_and_distribution_commands_create_review_files(

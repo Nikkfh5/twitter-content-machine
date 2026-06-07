@@ -28,6 +28,7 @@ Architecture:
 - LLM/context layer: `twitter_content_machine/context_bundle.py`,
   `twitter_content_machine/generation_workspace.py`,
   `twitter_content_machine/llm.py`, `twitter_content_machine/llm_parsing.py`
+- Native content Codex sessions: `twitter_content_machine/codex_session.py`
 - X read/analysis layer: `twitter_content_machine/x_read.py`,
   `twitter_content_machine/x_analysis.py`
 
@@ -73,6 +74,9 @@ CLI workflow:
   "<instruction>"`, `tw ready`, `tw reject`, and `tw algo` default to the
   current draft.
 - Switch active draft: `tw drafts`, `tw use 2`, `tw use latest`
+- Native content Codex session: `tw codex --prepare`, `tw codex --prepare
+  --file <notes.md> --thread`, `tw codex --run`
+- Import style/content gold references: `tw style-gold-import <zip|folder>`
 - Improve/check: `tw refine --pass human`, `tw review`
 - X-fit review: `tw algo`, `tw algo-review`, `tw media-plan`, `tw distribution-plan`
 - Identity/style review: `tw style-review --profile tg_crypto_clean`
@@ -118,6 +122,15 @@ Draft artifacts:
 - `tw search --smart` is read-only. It creates a folder under
   `~/twitter-system/searches/`, asks Codex CLI to rank/explain local memory
   candidates, and must not generate or publish posts.
+- `tw codex` creates a separate content-writing session under
+  `~/twitter-system/codex_sessions/<session_id>/` with its own content-only
+  `AGENTS.md`, `.codex_home/AGENTS.md`, `TASK.md`, `INPUT.md`,
+  `CONTEXT_BUNDLE.md`, `OUTPUT_SCHEMA.md`, and `output/`. This is the
+  preferred native folder for manually running Codex on already prepared notes
+  or drafts.
+- `tw style-gold-import` copies `style_gold.md` and `content_gold.md` into
+  `~/twitter-system/profile/`. Treat these as strong style/structure
+  references, not as permission to reuse old crypto shilling or advice.
 
 Project context behavior:
 - `tw` detects the git root with `git rev-parse --show-toplevel`; fallback is cwd.

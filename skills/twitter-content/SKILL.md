@@ -18,10 +18,11 @@ Default behavior:
 8. Create a dated draft folder with `13_context_bundle.md/json` and `14_llm_request.md`.
 9. Prefer plain `tw draft "<idea>"`; it uses Codex CLI, X-fit review, and `tg_crypto_clean` automatically when the profile exists.
 10. Treat the newest draft as the active draft; prefer `tw show`, `tw edit`, `tw review`, and `tw algo` without `latest` unless a specific older draft is needed.
-11. Produce variants + critique + final candidate through the CLI.
-12. Run X-fit review if algo-aware.
-13. Run identity/style review if identity-style is active.
-14. Keep all source/context files for debugging.
+11. For already prepared notes/articles, use `tw codex --prepare --file <file> --thread` to create a native content Codex session instead of running Codex in the repo root.
+12. Produce variants + critique + final candidate through the CLI.
+13. Run X-fit review if algo-aware.
+14. Run identity/style review if identity-style is active.
+15. Keep all source/context files for debugging.
 
 If the user did not specify format, ask or infer one of:
 - short
@@ -63,6 +64,10 @@ Never:
 - Switch active draft: `tw use 2`
 - Search memory: `tw search "<query>"`
 - Smart search through Codex CLI: `tw search --smart "<query>"`
+- Import style/content gold references: `tw style-gold-import "<zip-or-folder>"`
+- Prepare native Codex content session: `tw codex --prepare`
+- Prepare session from file: `tw codex --prepare --file "<notes.md>" --thread`
+- Run Codex in prepared session: `tw codex --run`
 - Algorithm review layers: `tw algo`
 - Algorithm review: `tw algo-review`
 - Media plan: `tw media-plan`
@@ -100,11 +105,16 @@ Expected generated files:
 - `.codex_home/AGENTS.md`
 - active draft pointer: `~/twitter-system/state/current_draft.txt`
 - edit artifacts: `17_edit_request.md`, `18_edit_raw_output.md`, `19_edit_parse_report.md`, and `revisions/*.md`
+- native content session folder: `~/twitter-system/codex_sessions/<session_id>/`
+- content session files: `AGENTS.md`, `TASK.md`, `INPUT.md`, `CONTEXT_BUNDLE.md`, `OUTPUT_SCHEMA.md`, `output/`, `.codex_home/AGENTS.md`
 
 Rules:
 - Source project `AGENTS.md` may be summarized into the context bundle.
 - Source project `AGENTS.md` must not become active instructions for content generation.
 - Draft folder `AGENTS.override.md` is the content-generation instruction layer.
+- For manual/final text work, never run Codex directly from the repo root.
+  Prepare a content session with `tw codex --prepare` and run Codex from that
+  session folder.
 - Default configurable model is `gpt-5.5` with `reasoning_effort=xhigh` and `speed=fast`.
 - Normal `tw draft` requires Codex CLI. If Codex is missing or returns invalid output, report the failure in `16_llm_parse_report.md` and fail the command.
 - Use `--no-llm` only when the user explicitly wants a local fallback draft.

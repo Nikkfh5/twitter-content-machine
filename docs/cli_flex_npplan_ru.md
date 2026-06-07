@@ -482,6 +482,107 @@ tw style-build tg_crypto_clean --auto
 tw draft --identity-style none "мысль"
 ```
 
+## Style/content gold
+
+Если есть готовый пакет с сильными примерами стиля и структуры:
+
+```powershell
+tw style-gold-import "C:\Users\v-353\Downloads\style_content_gold.zip"
+```
+
+Команда кладёт в профиль:
+
+```text
+~/twitter-system/profile/style_gold.md
+~/twitter-system/profile/content_gold.md
+~/twitter-system/profile/style_content_gold_report.md
+```
+
+Смысл:
+
+- `style_gold.md` — ритм, прямота, живая формулировка;
+- `content_gold.md` — структура мысли, треда, разбора, аргумента;
+- эти файлы используются в `tw codex` как reference слой;
+- копировать старый crypto/market контент буквально нельзя;
+- переносить надо механику мысли, а не шиллинг, прогнозы или финансовые советы.
+
+## Нативная папка Codex для финальной доводки
+
+Когда уже есть разбор статьи, почти готовый тред или сильный черновик, лучше использовать не `tw draft`, а отдельную Codex-папку:
+
+```powershell
+tw codex --prepare
+tw codex --prepare --thread
+tw codex --prepare --file "C:\path\article_notes.md" --thread
+tw codex --run
+```
+
+Что создаётся:
+
+```text
+~/twitter-system/codex_sessions/<session_id>/
+  AGENTS.md
+  TASK.md
+  INPUT.md
+  CONTEXT_BUNDLE.md
+  OUTPUT_SCHEMA.md
+  README.md
+  output/
+  .codex_home/AGENTS.md
+  .codex_home/config.toml
+```
+
+Это решает конфликт двух `AGENTS.md`:
+
+```text
+C:\N\hse\twitter-content-machine\AGENTS.md
+  = инструкции для разработки кода
+
+~/twitter-system/codex_sessions/<session_id>/AGENTS.md
+  = инструкции для финальной доводки текста
+```
+
+`tw codex --prepare` только готовит папку и печатает путь.
+
+`tw codex --run` запускает Codex из этой папки с изолированным `CODEX_HOME`.
+
+Режим треда:
+
+```powershell
+tw codex --prepare --thread
+```
+
+Режим одиночного финального поста:
+
+```powershell
+tw codex --prepare --final-post
+```
+
+Готовый файл с заметками:
+
+```powershell
+tw codex --prepare --file "C:\path\article_notes.md" --thread
+```
+
+Конкретный черновик:
+
+```powershell
+tw codex latest --prepare
+tw codex 20260607-... --prepare
+```
+
+Последняя Codex-session папка хранится тут:
+
+```text
+~/twitter-system/state/current_codex_session.txt
+```
+
+Codex внутри этой папки должен писать результат только в:
+
+```text
+output/
+```
+
 ## X read-only
 
 Синхронизация своих уже опубликованных постов:

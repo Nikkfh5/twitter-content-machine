@@ -9,6 +9,7 @@ from typing import Any
 from .algorithm_review import artifact_paths, write_algorithm_review, write_all_algorithm_layers, write_distribution_plan, write_media_plan
 from .article import store_article
 from .config import load_config
+from .codex_session import prepare_codex_session, run_codex_session
 from .db import connect_db, resolve_draft_id, search_memory, upsert_fts
 from .drafting import create_draft, refine_draft, review_draft, set_draft_status
 from .editing import edit_draft_with_codex
@@ -17,6 +18,7 @@ from .llm import codex_available, mode_description
 from .project_context import detect_project, refresh_project_context
 from .smart_search import run_smart_search
 from .state import draft_id_from_list_number, get_current_draft_id, resolve_active_draft_id, set_current_draft
+from .style_gold import import_style_content_gold
 from .telegram_import import import_telegram
 from .utils import iso_now, short_hash
 from .workspace import ensure_workspace
@@ -253,6 +255,15 @@ def _cmd_style_review(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_style_gold_import(args: argparse.Namespace) -> int:
+    result = import_style_content_gold(args.path)
+    print(f"profile: {result.profile_dir}")
+    for path in result.imported:
+        print(f"imported: {path}")
+    print(f"report: {result.report_path}")
+    return 0
+
+
 def _print_draft_rows(rows: list[dict[str, Any]], numbered: bool = False) -> None:
     current = get_current_draft_id()
     for index, row in enumerate(rows, start=1):
@@ -360,6 +371,31 @@ def _cmd_edit(args: argparse.Namespace) -> int:
     print(f"revision: {result.revision_path}")
     print("")
     print(result.final_text)
+    return 0
+
+
+def _cmd_codex(args: argparse.Namespace, cwd: Path | None = None) -> int:
+    output_mode = "thread" if args.thread else "final-post"
+    instruction = " ".join(args.instruction or []).strip()
+    session = prepare_codex_session(
+        draft_id=args.draft_id,
+        source_file=args.file,
+        output_mode=output_mode,
+        instruction=instruction,
+        cwd=cwd,
+    )
+    print(f"session: {session.session_dir}")
+    print(f"cd: {session.session_dir}")
+    print("command: " + " ".join(str(part) for part in session.command))
+    if args.print_command:
+        return 0
+    if args.run:
+        ran = run_codex_session(session)
+        print(f"codex exit: {ran.returncode}")
+        return int(ran.returncode or 0)
+    if args.prepare:
+        return 0
+    print("prepared. Run with: tw codex --run")
     return 0
 
 
@@ -543,6 +579,10 @@ def build_parser() -> argparse.ArgumentParser:
     style_review_cmd.add_argument("--identity-strength", type=float, default=0.35)
     style_review_cmd.set_defaults(func=_cmd_style_review)
 
+    style_gold_import = sub.add_parser("style-gold-import")
+    style_gold_import.add_argument("path")
+    style_gold_import.set_defaults(func=_cmd_style_gold_import)
+
     queue = sub.add_parser("queue")
     queue.add_argument("--status")
     queue.add_argument("--project-id")
@@ -575,6 +615,18 @@ def build_parser() -> argparse.ArgumentParser:
     edit_cmd.add_argument("instruction", nargs="*")
     edit_cmd.add_argument("--draft-id")
     edit_cmd.set_defaults(func=_cmd_edit)
+
+    codex_cmd = sub.add_parser("codex")
+    codex_cmd.add_argument("draft_id", nargs="?")
+    codex_cmd.add_argument("--file")
+    codex_mode = codex_cmd.add_mutually_exclusive_group()
+    codex_mode.add_argument("--thread", action="store_true")
+    codex_mode.add_argument("--final-post", action="store_true")
+    codex_cmd.add_argument("--prepare", action="store_true")
+    codex_cmd.add_argument("--run", action="store_true")
+    codex_cmd.add_argument("--print-command", action="store_true")
+    codex_cmd.add_argument("--instruction", nargs="*")
+    codex_cmd.set_defaults(func=_cmd_codex)
 
     open_cmd = sub.add_parser("open")
     open_cmd.add_argument("draft_id", nargs="?")
@@ -636,7 +688,7 @@ def run_cli(argv: list[str] | None = None, cwd: Path | None = None) -> int:
     args = parser.parse_args(argv)
     func = args.func
     try:
-        if args.command in {"idea", "capture", "draft", "refresh-context", "search"}:
+        if args.command in {"idea", "capture", "draft", "refresh-context", "search", "codex"}:
             return int(func(args, cwd))
         return int(func(args))
     except Exception as exc:

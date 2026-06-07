@@ -42,6 +42,9 @@ tw drafts
 tw use 2
 tw path
 tw search --smart "execution assumptions"
+tw style-gold-import "C:\Users\v-353\Downloads\style_content_gold.zip"
+tw codex --prepare --thread
+tw codex --run
 tw sync-posted
 tw analyze-own --sync
 ```
@@ -88,6 +91,58 @@ tw use latest
 Old explicit ids still work, for example `tw show latest` or
 `tw algo-review <draft_id>`.
 
+## Native Codex Content Sessions
+
+Use this when you already have a prepared article note, draft, or thread input
+and want to work inside a clean Codex folder with content-specific instructions:
+
+```powershell
+tw codex --prepare
+tw codex --prepare --thread
+tw codex --prepare --file "C:\path\article_notes.md" --thread
+tw codex --run
+```
+
+This creates:
+
+```text
+~/twitter-system/codex_sessions/<session_id>/
+  AGENTS.md
+  TASK.md
+  INPUT.md
+  CONTEXT_BUNDLE.md
+  OUTPUT_SCHEMA.md
+  README.md
+  output/
+  .codex_home/AGENTS.md
+  .codex_home/config.toml
+```
+
+The session `AGENTS.md` is for content finalization only. It is separate from
+the repo `AGENTS.md`, so Codex does not confuse code instructions with writing
+instructions. `tw codex --run` starts Codex from the session folder with isolated
+`CODEX_HOME`.
+
+The current session pointer is stored at:
+
+```text
+~/twitter-system/state/current_codex_session.txt
+```
+
+Import stronger style/content references:
+
+```powershell
+tw style-gold-import "C:\Users\v-353\Downloads\style_content_gold.zip"
+```
+
+This writes:
+
+```text
+~/twitter-system/profile/style_gold.md
+~/twitter-system/profile/content_gold.md
+~/twitter-system/profile/style_content_gold_report.md
+```
+
 ## Workspace Layout
 
 `tw ensure` creates the central workspace:
@@ -99,6 +154,7 @@ Old explicit ids still work, for example `tw show latest` or
   inbox/
   drafts/
   state/
+  codex_sessions/
   projects/
   searches/
   sources/
