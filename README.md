@@ -56,7 +56,13 @@ folder without opening a GUI.
 Russian CLI guide:
 
 ```text
-docs/cli_flex_npplan_ru.md
+docs/cli_descripsion_russion.md
+```
+
+Future style-learning backlog:
+
+```text
+docs/style-learning-from-posts-backlog.md
 ```
 
 ## Active Draft UX

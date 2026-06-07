@@ -175,9 +175,14 @@ Telegram identity/style:
 - Identity-style draft artifacts: `10_identity_style_review.md`,
   `11_examples_used.md`, `12_risk_flags.md`.
 - Identity strength `>0.6` is risky; require manual review.
+- Future backlog: let `tg_crypto_clean` learn from the user's own approved,
+  manually posted, or ready drafts over time. Do not import rejected drafts,
+  peer posts, source posts, or X-read external material as user style.
 
 Durable docs / resume:
-- Russian CLI guide: `docs/cli_flex_npplan_ru.md`
+- Russian CLI guide: `docs/cli_descripsion_russion.md`
+- Style learning from future posts backlog:
+  `docs/style-learning-from-posts-backlog.md`
 - Algorithm backlog: `docs/algorithm-aware/ideas-and-backlog.md`
 - Algorithm design/plan/progress:
   `docs/superpowers/specs/2026-06-06-algorithm-aware-review-layer-design.md`,
