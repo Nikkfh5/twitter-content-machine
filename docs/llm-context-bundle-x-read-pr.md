@@ -46,7 +46,7 @@ Implement:
 - `x_analysis.py`
 - config `[llm]` and expanded `[x]`
 - `tw draft --context-only`
-- `tw draft --llm auto|manual|codex|openai-api`
+- `tw draft --llm auto|codex`
 - `tw draft --model`
 - `tw draft --reasoning-effort`
 - `tw draft --speed`
@@ -75,6 +75,16 @@ Artifacts:
 
 Manual mode remains useful. If LLM is unavailable, fallback generation still
 creates drafts and records parse/failure status.
+
+Update after smart-default pass:
+
+- Normal `tw draft "<text>"` now uses Codex CLI through `[llm].mode = "auto"`.
+- No OpenAI API path is exposed in the public draft command.
+- `--no-llm` and `--context-only` are explicit local fallback/debug modes.
+- Missing Codex or invalid Codex output makes the command fail after writing
+  `16_llm_parse_report.md`.
+- X-fit review is enabled by default unless `--no-algo-aware` is used.
+- `tg_crypto_clean` is applied by default when the profile exists.
 
 X API support is read-only and testable by mocking HTTP. Missing credentials for
 `sync-posted` should exit cleanly; explicit peer reads may return error code 1.

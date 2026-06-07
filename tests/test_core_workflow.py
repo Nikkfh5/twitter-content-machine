@@ -13,7 +13,7 @@ from twitter_content_machine.cli import run_cli
 from twitter_content_machine.config import load_config
 from twitter_content_machine.db import connect_db, resolve_draft_id
 from twitter_content_machine.drafting import create_draft
-from twitter_content_machine.llm import build_codex_invocation_plan
+from twitter_content_machine.llm import build_codex_invocation_plan, resolve_codex_command
 from twitter_content_machine.llm_parsing import parse_llm_output
 from twitter_content_machine.project_context import detect_project, refresh_project_context
 from twitter_content_machine.review import contains_forbidden_phrase, redact_secrets
@@ -42,7 +42,7 @@ def test_ensure_creates_workspace_and_is_idempotent(tw_root: Path) -> None:
 
     config = load_config(tw_root)
     assert config.default_language == "auto"
-    assert config.llm_mode == "manual"
+    assert config.llm_mode == "auto"
     assert config.llm_model == "gpt-5.5"
     assert config.llm_reasoning_effort == "xhigh"
     assert config.llm_speed == "fast"
@@ -102,6 +102,7 @@ def test_draft_creates_expected_files_without_llm(tw_root: Path, tmp_path: Path)
         text="I realized my backtest execution assumptions are fake",
         draft_type="short",
         cwd=project,
+        no_llm=True,
     )
 
     expected = {
@@ -217,6 +218,100 @@ def test_context_only_draft_creates_bundle_and_isolated_generation_workspace(
     assert "Do code things" not in override
 
 
+def test_default_draft_requires_codex_when_no_llm_flag_is_absent(
+    tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = tmp_path / "strict-codex"
+    project.mkdir()
+    ensure_workspace()
+    monkeypatch.setattr("twitter_content_machine.llm.resolve_codex_command", lambda command: None)
+
+    assert run_cli(["draft", "raw thought"], cwd=project) == 1
+    output = capsys.readouterr()
+
+    assert "not found" in output.err.lower()
+    draft_id = resolve_draft_id("latest")
+    with connect_db() as conn:
+        row = conn.execute("select folder_path from drafts where id = ?", (draft_id,)).fetchone()
+    folder = Path(row["folder_path"])
+    report = (folder / "16_llm_parse_report.md").read_text(encoding="utf-8")
+    assert "ok: false" in report
+    assert "not found" in report.lower()
+
+
+def test_no_llm_keeps_manual_fallback_and_runs_algorithm_review_by_default(
+    tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tmp_path / "no-llm"
+    project.mkdir()
+    ensure_workspace()
+    monkeypatch.setattr("twitter_content_machine.llm.resolve_codex_command", lambda command: None)
+
+    assert run_cli(["draft", "--no-llm", "raw thought"], cwd=project) == 0
+
+    draft_id = resolve_draft_id("latest")
+    with connect_db() as conn:
+        row = conn.execute("select folder_path from drafts where id = ?", (draft_id,)).fetchone()
+    folder = Path(row["folder_path"])
+    assert (folder / "07_algorithm_review.md").exists()
+    assert (folder / "08_media_plan.md").exists()
+    assert (folder / "09_distribution_plan.md").exists()
+
+
+def test_default_draft_uses_tg_crypto_clean_identity_when_profile_exists(
+    tw_root: Path, tmp_path: Path
+) -> None:
+    project = tmp_path / "default-identity"
+    project.mkdir()
+    ensure_workspace()
+    now = "2026-06-07T00:00:00"
+    with connect_db() as conn:
+        conn.execute(
+            "insert into identity_style_profiles(profile_name, created_at, updated_at, summary, default_strength, status) values(?, ?, ?, ?, ?, ?)",
+            ("tg_crypto_clean", now, now, "ready", 0.35, "built"),
+        )
+        conn.execute(
+            """
+            insert into telegram_messages(id, profile_name, telegram_message_id, date, source_role, forwarded_from,
+              author, text_clean, text_raw_hash, length, reactions, has_photo, media_type, risk_flags, labels, imported_at)
+            values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "tg_crypto_clean:1",
+                "tg_crypto_clean",
+                "1",
+                now,
+                "own_original",
+                "",
+                "",
+                "кажется, я понял где ломается проверка: не в модели, а в протоколе",
+                "hash",
+                72,
+                0,
+                0,
+                "",
+                "[]",
+                "",
+                now,
+            ),
+        )
+        conn.execute(
+            "insert into identity_style_examples(id, profile_name, telegram_message_id, label, note, created_at) values(?, ?, ?, ?, ?, ?)",
+            ("tg_crypto_clean:1:auto_gold", "tg_crypto_clean", "1", "auto_gold", "test", now),
+        )
+
+    assert run_cli(["draft", "--no-llm", "raw thought"], cwd=project) == 0
+
+    draft_id = resolve_draft_id("latest")
+    with connect_db() as conn:
+        row = conn.execute("select folder_path from drafts where id = ?", (draft_id,)).fetchone()
+    folder = Path(row["folder_path"])
+    assert (folder / "10_identity_style_review.md").exists()
+    assert (folder / "11_examples_used.md").exists()
+    assert (folder / "12_risk_flags.md").exists()
+    assert "tg_crypto_clean" in (folder / "meta.yaml").read_text(encoding="utf-8")
+
+
 def test_print_prompt_path_outputs_llm_request_path(
     tw_root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -284,9 +379,9 @@ def test_codex_invocation_plan_uses_draft_folder_and_isolated_home(
             self.stdout = stdout
 
     def fake_run(command, **kwargs):
-        if command == ["codex", "--help"]:
+        if command == ["C:/bin/codex.exe", "--help"]:
             return Completed("Usage\nCommands:\n  exec\n")
-        if command == ["codex", "exec", "--help"]:
+        if command == ["C:/bin/codex.exe", "exec", "--help"]:
             return Completed("Usage\n  --cd <DIR>\n  --model <MODEL>\n  --config <KEY=VALUE>\n")
         return Completed("")
 
@@ -309,11 +404,141 @@ def test_open_latest_resolves_existing_draft_without_gui(tw_root: Path, tmp_path
     project = tmp_path / "systems"
     project.mkdir()
     ensure_workspace()
-    draft = create_draft("this broke because the cache key ignored branch", "build-log", project)
+    draft = create_draft("this broke because the cache key ignored branch", "build-log", project, no_llm=True)
 
     assert run_cli(["open", "latest", "--print-path"], cwd=project) == 0
     output = capsys.readouterr().out
     assert str(draft.folder) in output
+
+
+def test_current_draft_commands_default_to_active_draft(
+    tw_root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = tmp_path / "active-draft"
+    project.mkdir()
+    ensure_workspace()
+
+    assert run_cli(["draft", "--no-llm", "execution assumptions broke the backtest"], cwd=project) == 0
+    capsys.readouterr()
+
+    assert run_cli(["path"], cwd=project) == 0
+    path_output = capsys.readouterr().out
+    assert "draft_" in path_output
+    assert "06_final_candidate.md" not in path_output
+
+    assert run_cli(["show"], cwd=project) == 0
+    show_output = capsys.readouterr().out
+    assert "execution assumptions" in show_output
+
+    assert run_cli(["ready"], cwd=project) == 0
+    ready_output = capsys.readouterr().out
+    assert "ready" in ready_output
+    with connect_db() as conn:
+        row = conn.execute("select status from drafts where id = ?", (resolve_draft_id("latest"),)).fetchone()
+    assert row["status"] == "ready"
+
+
+def test_use_switches_current_draft_by_list_number(
+    tw_root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = tmp_path / "switch-draft"
+    project.mkdir()
+    ensure_workspace()
+
+    older = create_draft("older thought about fills", "short", project, no_llm=True)
+    newer = create_draft("newer thought about validation", "short", project, no_llm=True)
+
+    assert run_cli(["drafts", "--limit", "2"], cwd=project) == 0
+    listing = capsys.readouterr().out
+    assert "* 1" in listing
+    assert newer.id in listing
+    assert older.id in listing
+
+    assert run_cli(["use", "2"], cwd=project) == 0
+    use_output = capsys.readouterr().out
+    assert older.id in use_output
+
+    assert run_cli(["show"], cwd=project) == 0
+    show_output = capsys.readouterr().out
+    assert "older thought" in show_output
+
+
+def test_review_layers_default_to_current_draft(tw_root: Path, tmp_path: Path) -> None:
+    project = tmp_path / "current-review"
+    project.mkdir()
+    ensure_workspace()
+    draft = create_draft("I stopped trusting fake fills", "short", project, no_llm=True)
+
+    assert run_cli(["algo"], cwd=project) == 0
+    assert run_cli(["review"], cwd=project) == 0
+    assert run_cli(["algo-review"], cwd=project) == 0
+    assert run_cli(["media-plan"], cwd=project) == 0
+    assert run_cli(["distribution-plan"], cwd=project) == 0
+
+    assert (draft.folder / "07_algorithm_review.md").exists()
+    assert (draft.folder / "08_media_plan.md").exists()
+    assert (draft.folder / "09_distribution_plan.md").exists()
+
+
+def test_edit_current_draft_uses_codex_and_updates_final_candidate(
+    tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = tmp_path / "edit-current"
+    project.mkdir()
+    ensure_workspace()
+    draft = create_draft("Long draft about execution assumptions.", "short", project, no_llm=True)
+
+    class Completed:
+        returncode = 0
+        stdout = '{"final_candidate": "Shorter execution note."}'
+        stderr = ""
+
+    monkeypatch.setattr("twitter_content_machine.llm.shutil.which", lambda command: "C:/bin/codex.exe")
+    monkeypatch.setattr("twitter_content_machine.llm.detect_codex_capabilities", lambda command="codex": {"exec": True, "cd": True, "model": True, "config": False})
+    monkeypatch.setattr("twitter_content_machine.editing.subprocess.run", lambda command, **kwargs: Completed())
+
+    assert run_cli(["edit", "make it shorter"], cwd=project) == 0
+    output = capsys.readouterr().out
+
+    assert "Shorter execution note." in output
+    assert (draft.folder / "06_final_candidate.md").read_text(encoding="utf-8") == "Shorter execution note.\n"
+    assert (draft.folder / "17_edit_request.md").exists()
+    assert (draft.folder / "18_edit_raw_output.md").exists()
+    assert (draft.folder / "19_edit_parse_report.md").exists()
+    assert list((draft.folder / "revisions").glob("*.md"))
+    with connect_db() as conn:
+        row = conn.execute("select final_text from drafts where id = ?", (draft.id,)).fetchone()
+    assert row["final_text"] == "Shorter execution note."
+
+
+def test_smart_search_uses_codex_over_memory_candidates(
+    tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = tmp_path / "smart-search"
+    project.mkdir()
+    ensure_workspace()
+    assert run_cli(["idea", "execution assumptions erased the fake edge"], cwd=project) == 0
+    capsys.readouterr()
+
+    class Completed:
+        returncode = 0
+        stdout = "Best match: idea about execution assumptions."
+        stderr = ""
+
+    monkeypatch.setattr("twitter_content_machine.llm.shutil.which", lambda command: "C:/bin/codex.exe")
+    monkeypatch.setattr("twitter_content_machine.llm.detect_codex_capabilities", lambda command="codex": {"exec": True, "cd": True, "model": True, "config": False})
+    monkeypatch.setattr("twitter_content_machine.smart_search.subprocess.run", lambda command, **kwargs: Completed())
+
+    assert run_cli(["search", "--smart", "execution assumptions"], cwd=project) == 0
+    output = capsys.readouterr().out
+
+    assert "Best match" in output
+    search_dirs = list((tw_root / "searches").glob("*"))
+    assert search_dirs
+    latest = sorted(search_dirs)[-1]
+    assert (latest / "01_candidates.md").exists()
+    assert (latest / "02_codex_request.md").exists()
+    assert (latest / "03_codex_raw_output.md").exists()
 
 
 def test_algo_review_media_and_distribution_commands_create_review_files(
@@ -326,6 +551,7 @@ def test_algo_review_media_and_distribution_commands_create_review_files(
         "I misunderstood backtest fills until fees and worse execution erased the edge",
         "short",
         project,
+        no_llm=True,
     )
 
     assert run_cli(["algo-review", "latest"], cwd=project) == 0
@@ -349,11 +575,12 @@ def test_algo_aware_draft_runs_all_review_layers(tw_root: Path, tmp_path: Path) 
 
     assert (
         run_cli(
-            [
-                "draft",
-                "--algo-aware",
-                "--short",
-                "Small build note: the model was less broken than the validation protocol",
+                [
+                    "draft",
+                    "--no-llm",
+                    "--algo-aware",
+                    "--short",
+                    "Small build note: the model was less broken than the validation protocol",
             ],
             cwd=project,
         )
@@ -376,7 +603,7 @@ def test_algo_review_flags_repeated_ideas(tw_root: Path, tmp_path: Path) -> None
     ensure_workspace()
     text = "Backtesting realism improved only after I stopped trusting fake fills"
     assert run_cli(["idea", text], cwd=project) == 0
-    draft = create_draft(text, "short", project)
+    draft = create_draft(text, "short", project, no_llm=True)
 
     assert run_cli(["algo-review", draft.id], cwd=project) == 0
     review = (draft.folder / "07_algorithm_review.md").read_text(encoding="utf-8").lower()
@@ -395,6 +622,7 @@ def test_algo_review_rejects_crypto_financial_advice_language(
         "This alpha is easy money: buy now for 100x, not financial advice",
         "short",
         project,
+        no_llm=True,
     )
 
     assert run_cli(["algo-review", draft.id], cwd=project) == 0
@@ -413,6 +641,7 @@ def test_media_plan_rejects_decorative_media(tw_root: Path, tmp_path: Path) -> N
         "Small note: the useful lesson was that validation leaked through the feature protocol",
         "short",
         project,
+        no_llm=True,
     )
 
     assert run_cli(["media-plan", draft.id], cwd=project) == 0
@@ -428,7 +657,7 @@ def test_algo_review_revises_thread_when_one_idea_is_stretched(
     project = tmp_path / "thread"
     project.mkdir()
     ensure_workspace()
-    draft = create_draft("backtesting assumptions matter", "thread", project)
+    draft = create_draft("backtesting assumptions matter", "thread", project, no_llm=True)
     (draft.folder / "06_final_candidate.md").write_text(
         "\n\n".join(
             [
@@ -571,11 +800,12 @@ def test_identity_style_draft_and_review_create_required_files(
 
     assert (
         run_cli(
-            [
-                "draft",
-                "--short",
-                "--algo-aware",
-                "--identity-style",
+                [
+                    "draft",
+                    "--no-llm",
+                    "--short",
+                    "--algo-aware",
+                    "--identity-style",
                 "tg_crypto_clean",
                 "--identity-strength",
                 "0.35",

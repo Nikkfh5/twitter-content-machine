@@ -11,7 +11,7 @@ default_language = "auto" # auto | en | ru
 context_cache_minutes = 30
 
 [llm]
-mode = "manual" # manual | codex | openai-api
+mode = "auto" # auto | codex
 model = "gpt-5.5"
 reasoning_effort = "xhigh" # low | medium | high | xhigh
 speed = "fast"
@@ -80,11 +80,13 @@ def load_config(root: Path | None = None) -> Config:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     x = data.get("x", {})
     llm = data.get("llm", {})
-    legacy_mode = data.get("llm_mode", "manual")
+    legacy_mode = data.get("llm_mode", "auto")
+    raw_llm_mode = str(llm.get("mode", legacy_mode))
+    llm_mode = raw_llm_mode if raw_llm_mode in {"auto", "codex"} else "auto"
     return Config(
         root=root,
         default_language=str(data.get("default_language", "auto")),
-        llm_mode=str(llm.get("mode", legacy_mode)),
+        llm_mode=llm_mode,
         llm_model=str(llm.get("model", os.environ.get("OPENAI_MODEL", "gpt-5.5"))),
         llm_reasoning_effort=str(llm.get("reasoning_effort", os.environ.get("OPENAI_REASONING_EFFORT", "xhigh"))),
         llm_speed=str(llm.get("speed", "fast")),

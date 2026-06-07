@@ -234,7 +234,7 @@ def search_memory(
 
 def latest_draft_id() -> str | None:
     with connect_db() as conn:
-        row = conn.execute("select id from drafts order by created_at desc limit 1").fetchone()
+        row = conn.execute("select id from drafts order by created_at desc, rowid desc limit 1").fetchone()
     return row["id"] if row else None
 
 

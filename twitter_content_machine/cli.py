@@ -11,9 +11,12 @@ from .article import store_article
 from .config import load_config
 from .db import connect_db, resolve_draft_id, search_memory, upsert_fts
 from .drafting import create_draft, refine_draft, review_draft, set_draft_status
+from .editing import edit_draft_with_codex
 from .identity_style import auto_select_examples, style_build, style_curate, style_refresh, style_review, write_style_stats
 from .llm import codex_available, mode_description
 from .project_context import detect_project, refresh_project_context
+from .smart_search import run_smart_search
+from .state import draft_id_from_list_number, get_current_draft_id, resolve_active_draft_id, set_current_draft
 from .telegram_import import import_telegram
 from .utils import iso_now, short_hash
 from .workspace import ensure_workspace
@@ -56,7 +59,7 @@ def list_drafts(status: str | None = None, project_id: str | None = None, limit:
     where = " where " + " and ".join(clauses) if clauses else ""
     with connect_db() as conn:
         rows = conn.execute(
-            f"select id, created_at, type, status, project_id, title, folder_path from drafts{where} order by created_at desc limit ?",
+            f"select id, created_at, type, status, project_id, title, folder_path from drafts{where} order by created_at desc, rowid desc limit ?",
             (*params, limit),
         ).fetchall()
     return [dict(row) for row in rows]
@@ -67,6 +70,25 @@ def _draft_type_from_args(args: argparse.Namespace) -> str:
         if getattr(args, name, False):
             return name.replace("_", "-")
     return "short"
+
+
+def _built_identity_profile_exists(profile_name: str) -> bool:
+    ensure_workspace()
+    with connect_db() as conn:
+        row = conn.execute(
+            "select status from identity_style_profiles where profile_name = ?",
+            (profile_name,),
+        ).fetchone()
+    return bool(row and row["status"] == "built")
+
+
+def _identity_style_from_args(args: argparse.Namespace) -> str | None:
+    if args.identity_style:
+        if args.identity_style.lower() in {"none", "off", "no", "false"}:
+            return None
+        return args.identity_style
+    default_profile = "tg_crypto_clean"
+    return default_profile if _built_identity_profile_exists(default_profile) else None
 
 
 def _cmd_init(args: argparse.Namespace) -> int:
@@ -106,14 +128,15 @@ def _cmd_draft(args: argparse.Namespace, cwd: Path | None) -> int:
     if not text:
         print("draft text required")
         return 1
+    identity_style = _identity_style_from_args(args)
     draft = create_draft(
         text,
         _draft_type_from_args(args),
         cwd,
         args.url,
         args.copy,
-        args.identity_style,
-        args.identity_strength if args.identity_style else 0.0,
+        identity_style,
+        args.identity_strength if identity_style else 0.0,
         args.llm,
         args.model,
         args.reasoning_effort,
@@ -164,29 +187,31 @@ def _cmd_sync_posted(args: argparse.Namespace) -> int:
 
 def _cmd_refine(args: argparse.Namespace) -> int:
     instruction = args.pass_name or "human"
-    draft = refine_draft(args.draft_id, instruction)
+    draft_id = resolve_active_draft_id(getattr(args, "draft_id", None))
+    draft = refine_draft(draft_id, instruction)
+    set_current_draft(draft.id)
     print(f"revision saved: {draft.folder / 'revisions'}")
     print(draft.final_text)
     return 0
 
 
 def _cmd_review(args: argparse.Namespace) -> int:
-    print(review_draft(args.draft_id))
+    print(review_draft(resolve_active_draft_id(getattr(args, "draft_id", None))))
     return 0
 
 
 def _cmd_algo_review(args: argparse.Namespace) -> int:
-    print(write_algorithm_review(args.draft_id))
+    print(write_algorithm_review(resolve_active_draft_id(getattr(args, "draft_id", None))))
     return 0
 
 
 def _cmd_media_plan(args: argparse.Namespace) -> int:
-    print(write_media_plan(args.draft_id))
+    print(write_media_plan(resolve_active_draft_id(getattr(args, "draft_id", None))))
     return 0
 
 
 def _cmd_distribution_plan(args: argparse.Namespace) -> int:
-    print(write_distribution_plan(args.draft_id))
+    print(write_distribution_plan(resolve_active_draft_id(getattr(args, "draft_id", None))))
     return 0
 
 
@@ -224,8 +249,16 @@ def _cmd_style_curate(args: argparse.Namespace) -> int:
 
 
 def _cmd_style_review(args: argparse.Namespace) -> int:
-    print(style_review(args.draft_id, args.profile, args.identity_strength))
+    print(style_review(resolve_active_draft_id(getattr(args, "draft_id", None)), args.profile, args.identity_strength))
     return 0
+
+
+def _print_draft_rows(rows: list[dict[str, Any]], numbered: bool = False) -> None:
+    current = get_current_draft_id()
+    for index, row in enumerate(rows, start=1):
+        active = "*" if row["id"] == current else " "
+        prefix = f"{active} {index:<2} " if numbered else f"{active} "
+        print(f"{prefix}{row['created_at']}  {row['status']:<8} {row['type']:<12} {row['id']}  {row['title']}")
 
 
 def _cmd_queue(args: argparse.Namespace) -> int:
@@ -233,13 +266,64 @@ def _cmd_queue(args: argparse.Namespace) -> int:
     if not rows:
         print("no drafts")
         return 0
-    for row in rows:
-        print(f"{row['created_at']}  {row['status']:<8} {row['type']:<12} {row['id']}  {row['title']}")
+    _print_draft_rows(rows)
+    return 0
+
+
+def _cmd_drafts(args: argparse.Namespace) -> int:
+    rows = list_drafts(args.status, args.project_id, args.limit)
+    if not rows:
+        print("no drafts")
+        return 0
+    _print_draft_rows(rows, numbered=True)
+    return 0
+
+
+def _cmd_use(args: argparse.Namespace) -> int:
+    rows = list_drafts(limit=100)
+    draft_id = draft_id_from_list_number(args.target, rows) or resolve_active_draft_id(args.target)
+    with connect_db() as conn:
+        row = conn.execute("select id, folder_path from drafts where id = ?", (draft_id,)).fetchone()
+    if not row:
+        print(f"draft not found: {args.target}")
+        return 1
+    set_current_draft(draft_id)
+    print(f"current draft: {draft_id}")
+    print(row["folder_path"])
+    return 0
+
+
+def _cmd_show(args: argparse.Namespace) -> int:
+    draft_id = resolve_active_draft_id(getattr(args, "draft_id", None))
+    with connect_db() as conn:
+        row = conn.execute("select final_text from drafts where id = ?", (draft_id,)).fetchone()
+    if not row:
+        print(f"draft not found: {draft_id}")
+        return 1
+    print(row["final_text"] or "")
+    return 0
+
+
+def _cmd_path(args: argparse.Namespace) -> int:
+    draft_id = resolve_active_draft_id(getattr(args, "draft_id", None))
+    with connect_db() as conn:
+        row = conn.execute("select folder_path from drafts where id = ?", (draft_id,)).fetchone()
+    if not row:
+        print(f"draft not found: {draft_id}")
+        return 1
+    print(row["folder_path"])
+    return 0
+
+
+def _cmd_algo(args: argparse.Namespace) -> int:
+    draft_id = resolve_active_draft_id(getattr(args, "draft_id", None))
+    paths = write_all_algorithm_layers(draft_id)
+    print(artifact_paths(paths))
     return 0
 
 
 def _cmd_open(args: argparse.Namespace) -> int:
-    draft_id = resolve_draft_id(args.draft_id)
+    draft_id = resolve_active_draft_id(getattr(args, "draft_id", None))
     with connect_db() as conn:
         row = conn.execute("select folder_path from drafts where id = ?", (draft_id,)).fetchone()
     if not row:
@@ -260,13 +344,36 @@ def _cmd_open(args: argparse.Namespace) -> int:
 
 
 def _cmd_mark(args: argparse.Namespace, status: str) -> int:
-    set_draft_status(args.draft_id, status, getattr(args, "url", None))
-    print(f"{args.draft_id}: {status}")
+    draft_id = resolve_active_draft_id(getattr(args, "draft_id", None))
+    set_draft_status(draft_id, status, getattr(args, "url", None))
+    set_current_draft(draft_id)
+    print(f"{draft_id}: {status}")
     return 0
 
 
-def _cmd_search(args: argparse.Namespace) -> int:
+def _cmd_edit(args: argparse.Namespace) -> int:
+    instruction = " ".join(args.instruction).strip()
+    if not instruction:
+        print("edit instruction required")
+        return 1
+    result = edit_draft_with_codex(getattr(args, "draft_id", None), instruction)
+    print(f"revision: {result.revision_path}")
+    print("")
+    print(result.final_text)
+    return 0
+
+
+def _cmd_search(args: argparse.Namespace, cwd: Path | None = None) -> int:
     ensure_workspace()
+    if args.smart:
+        result = run_smart_search(args.query, args.limit, cwd)
+        if result is None:
+            print("no matches")
+            return 0
+        print(result.output)
+        print("")
+        print(f"search log: {result.folder}")
+        return 0
     rows = search_memory(args.query, args.limit)
     if not rows:
         print("no matches")
@@ -358,10 +465,12 @@ def build_parser() -> argparse.ArgumentParser:
     kind.add_argument("--question", action="store_true")
     draft.add_argument("--url")
     draft.add_argument("--copy", action="store_true")
-    draft.add_argument("--algo-aware", action="store_true")
+    draft.set_defaults(algo_aware=True)
+    draft.add_argument("--algo-aware", dest="algo_aware", action="store_true")
+    draft.add_argument("--no-algo-aware", dest="algo_aware", action="store_false")
     draft.add_argument("--identity-style")
     draft.add_argument("--identity-strength", type=float, default=0.35)
-    draft.add_argument("--llm", choices=["auto", "manual", "codex", "openai-api"])
+    draft.add_argument("--llm", choices=["auto", "codex"])
     draft.add_argument("--model")
     draft.add_argument("--reasoning-effort", choices=["low", "medium", "high", "xhigh"])
     draft.add_argument("--speed")
@@ -384,24 +493,24 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("sync-posted").set_defaults(func=_cmd_sync_posted)
 
     refine = sub.add_parser("refine")
-    refine.add_argument("draft_id")
+    refine.add_argument("draft_id", nargs="?")
     refine.add_argument("--pass", dest="pass_name", choices=["critique", "compress", "human", "thread", "shorten", "clarify", "identity"])
     refine.set_defaults(func=_cmd_refine)
 
     review = sub.add_parser("review")
-    review.add_argument("draft_id")
+    review.add_argument("draft_id", nargs="?")
     review.set_defaults(func=_cmd_review)
 
     algo_review = sub.add_parser("algo-review")
-    algo_review.add_argument("draft_id")
+    algo_review.add_argument("draft_id", nargs="?")
     algo_review.set_defaults(func=_cmd_algo_review)
 
     media_plan = sub.add_parser("media-plan")
-    media_plan.add_argument("draft_id")
+    media_plan.add_argument("draft_id", nargs="?")
     media_plan.set_defaults(func=_cmd_media_plan)
 
     distribution_plan = sub.add_parser("distribution-plan")
-    distribution_plan.add_argument("draft_id")
+    distribution_plan.add_argument("draft_id", nargs="?")
     distribution_plan.set_defaults(func=_cmd_distribution_plan)
 
     tg_import = sub.add_parser("tg-import")
@@ -429,7 +538,7 @@ def build_parser() -> argparse.ArgumentParser:
     style_curate_cmd.set_defaults(func=_cmd_style_curate)
 
     style_review_cmd = sub.add_parser("style-review")
-    style_review_cmd.add_argument("draft_id")
+    style_review_cmd.add_argument("draft_id", nargs="?")
     style_review_cmd.add_argument("--profile", default="tg_crypto_clean")
     style_review_cmd.add_argument("--identity-strength", type=float, default=0.35)
     style_review_cmd.set_defaults(func=_cmd_style_review)
@@ -440,27 +549,64 @@ def build_parser() -> argparse.ArgumentParser:
     queue.add_argument("--limit", type=int, default=50)
     queue.set_defaults(func=_cmd_queue)
 
+    drafts_cmd = sub.add_parser("drafts")
+    drafts_cmd.add_argument("--status")
+    drafts_cmd.add_argument("--project-id")
+    drafts_cmd.add_argument("--limit", type=int, default=20)
+    drafts_cmd.set_defaults(func=_cmd_drafts)
+
+    use_cmd = sub.add_parser("use")
+    use_cmd.add_argument("target")
+    use_cmd.set_defaults(func=_cmd_use)
+
+    show_cmd = sub.add_parser("show")
+    show_cmd.add_argument("draft_id", nargs="?")
+    show_cmd.set_defaults(func=_cmd_show)
+
+    path_cmd = sub.add_parser("path")
+    path_cmd.add_argument("draft_id", nargs="?")
+    path_cmd.set_defaults(func=_cmd_path)
+
+    algo_cmd = sub.add_parser("algo")
+    algo_cmd.add_argument("draft_id", nargs="?")
+    algo_cmd.set_defaults(func=_cmd_algo)
+
+    edit_cmd = sub.add_parser("edit")
+    edit_cmd.add_argument("instruction", nargs="*")
+    edit_cmd.add_argument("--draft-id")
+    edit_cmd.set_defaults(func=_cmd_edit)
+
     open_cmd = sub.add_parser("open")
-    open_cmd.add_argument("draft_id")
+    open_cmd.add_argument("draft_id", nargs="?")
     open_cmd.add_argument("--print-path", action="store_true")
     open_cmd.set_defaults(func=_cmd_open)
 
     mark_ready = sub.add_parser("mark-ready")
-    mark_ready.add_argument("draft_id")
+    mark_ready.add_argument("draft_id", nargs="?")
     mark_ready.set_defaults(func=lambda args: _cmd_mark(args, "ready"))
 
+    ready = sub.add_parser("ready")
+    ready.add_argument("draft_id", nargs="?")
+    ready.set_defaults(func=lambda args: _cmd_mark(args, "ready"))
+
     reject = sub.add_parser("reject")
-    reject.add_argument("draft_id")
+    reject.add_argument("draft_id", nargs="?")
     reject.set_defaults(func=lambda args: _cmd_mark(args, "rejected"))
 
     mark_posted = sub.add_parser("mark-posted")
-    mark_posted.add_argument("draft_id")
+    mark_posted.add_argument("draft_id", nargs="?")
     mark_posted.add_argument("--url")
     mark_posted.set_defaults(func=lambda args: _cmd_mark(args, "posted"))
+
+    posted = sub.add_parser("posted")
+    posted.add_argument("draft_id", nargs="?")
+    posted.add_argument("--url")
+    posted.set_defaults(func=lambda args: _cmd_mark(args, "posted"))
 
     search = sub.add_parser("search")
     search.add_argument("query")
     search.add_argument("--limit", type=int, default=10)
+    search.add_argument("--smart", action="store_true")
     search.set_defaults(func=_cmd_search)
 
     sub.add_parser("doctor").set_defaults(func=_cmd_doctor)
@@ -490,7 +636,7 @@ def run_cli(argv: list[str] | None = None, cwd: Path | None = None) -> int:
     args = parser.parse_args(argv)
     func = args.func
     try:
-        if args.command in {"idea", "capture", "draft", "refresh-context"}:
+        if args.command in {"idea", "capture", "draft", "refresh-context", "search"}:
             return int(func(args, cwd))
         return int(func(args))
     except Exception as exc:

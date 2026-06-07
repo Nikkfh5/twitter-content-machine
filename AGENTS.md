@@ -63,19 +63,25 @@ Setup:
 
 CLI workflow:
 - Capture: `tw idea "<text>"`, `tw capture`
-- Draft: `tw draft --short|--thread|--article-note|--build-log|--question "<text>"`
-- Algorithm-aware draft: `tw draft --algo-aware --short "<text>"`
-- LLM/context draft: `tw draft --llm manual|auto|codex|openai-api --short "<text>"`
+- Draft: `tw draft "<text>"` uses Codex CLI, short format, X-fit review, and default identity style when available.
+- Format override: `tw draft --short|--thread|--article-note|--build-log|--question "<text>"`
+- LLM/context draft: `tw draft --llm auto|codex --short "<text>"`
+- Local fallback draft: `tw draft --no-llm --short "<text>"`
 - Context-only bundle: `tw draft --context-only --print-prompt-path --short "<text>"`
-- Identity-style draft: `tw draft --identity-style tg_crypto_clean --identity-strength 0.35 --short "<text>"`
-- Improve/check: `tw refine latest --pass human`, `tw review latest`
-- X-fit review: `tw algo-review latest`, `tw media-plan latest`, `tw distribution-plan latest`
-- Identity/style review: `tw style-review latest --profile tg_crypto_clean`
+- Identity-style override: `tw draft --identity-style tg_crypto_clean --identity-strength 0.35 --short "<text>"`
+- Active draft UX: new drafts become current; `tw show`, `tw path`, `tw edit
+  "<instruction>"`, `tw ready`, `tw reject`, and `tw algo` default to the
+  current draft.
+- Switch active draft: `tw drafts`, `tw use 2`, `tw use latest`
+- Improve/check: `tw refine --pass human`, `tw review`
+- X-fit review: `tw algo`, `tw algo-review`, `tw media-plan`, `tw distribution-plan`
+- Identity/style review: `tw style-review --profile tg_crypto_clean`
 - Telegram import: `tw tg-import <result.json|folder|zip> --profile tg_crypto_clean`
 - Style build/curation: `tw style-build tg_crypto_clean --auto`,
   `tw style-refresh tg_crypto_clean`, `tw style-stats tg_crypto_clean`,
   `tw style-curate tg_crypto_clean`
-- Inspect: `tw queue`, `tw search "<query>"`, `tw open latest --print-path`
+- Inspect: `tw queue`, `tw drafts`, `tw search "<query>"`,
+  `tw search --smart "<query>"`, `tw path`
 - Project context: `tw refresh-context --force`
 - X/read-only: `tw x-read <user-or-url>`, `tw sync-posted`
 - X analysis: `tw analyze-own --sync`, `tw analyze-peer <user-or-url> --limit 100`
@@ -101,8 +107,17 @@ Draft artifacts:
 - Identity-style commands append `10_identity_style_review.md`,
   `11_examples_used.md`, and `12_risk_flags.md`.
 - Treat generation as workshop output: variants, critique, anti-GPT pass, final candidate.
-- Default LLM config is `model = "gpt-5.5"`, `reasoning_effort = "xhigh"`,
-  `speed = "fast"`, all overrideable.
+- Default LLM config is `mode = "auto"`, `model = "gpt-5.5"`,
+  `reasoning_effort = "xhigh"`, `speed = "fast"`. `tw draft` requires Codex
+  CLI unless `--no-llm` or `--context-only` is used.
+- Active draft state lives at `~/twitter-system/state/current_draft.txt`.
+  This is only a pointer to the current draft id; it is not content memory.
+- `tw edit` uses Codex CLI from the draft folder, writes
+  `17_edit_request.md`, `18_edit_raw_output.md`, `19_edit_parse_report.md`,
+  updates `06_final_candidate.md`, and stores a revision under `revisions/`.
+- `tw search --smart` is read-only. It creates a folder under
+  `~/twitter-system/searches/`, asks Codex CLI to rank/explain local memory
+  candidates, and must not generate or publish posts.
 
 Project context behavior:
 - `tw` detects the git root with `git rev-parse --show-toplevel`; fallback is cwd.
@@ -149,6 +164,7 @@ Telegram identity/style:
 - Identity strength `>0.6` is risky; require manual review.
 
 Durable docs / resume:
+- Russian CLI guide: `docs/cli_flex_npplan_ru.md`
 - Algorithm backlog: `docs/algorithm-aware/ideas-and-backlog.md`
 - Algorithm design/plan/progress:
   `docs/superpowers/specs/2026-06-06-algorithm-aware-review-layer-design.md`,

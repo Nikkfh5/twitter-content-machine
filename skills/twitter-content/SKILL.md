@@ -16,11 +16,12 @@ Default behavior:
 6. Search memory for related old drafts/posts.
 7. If identity/style is configured, use it at safe strength <= 0.35 unless user asks otherwise.
 8. Create a dated draft folder with `13_context_bundle.md/json` and `14_llm_request.md`.
-9. Prefer `tw draft --llm auto --algo-aware --identity-style tg_crypto_clean --identity-strength 0.35` when identity_style exists.
-10. Produce variants + critique + final candidate through the CLI.
-11. Run X-fit review if algo-aware.
-12. Run identity/style review if identity-style is active.
-13. Keep all source/context files for debugging.
+9. Prefer plain `tw draft "<idea>"`; it uses Codex CLI, X-fit review, and `tg_crypto_clean` automatically when the profile exists.
+10. Treat the newest draft as the active draft; prefer `tw show`, `tw edit`, `tw review`, and `tw algo` without `latest` unless a specific older draft is needed.
+11. Produce variants + critique + final candidate through the CLI.
+12. Run X-fit review if algo-aware.
+13. Run identity/style review if identity-style is active.
+14. Keep all source/context files for debugging.
 
 If the user did not specify format, ask or infer one of:
 - short
@@ -48,26 +49,32 @@ Never:
 
 ## Commands
 
+- New default draft: `tw draft "<idea>"`
 - New short draft: `tw draft --short "<idea>"`
-- Default algo/identity draft: `tw draft --llm auto --algo-aware --identity-style tg_crypto_clean --identity-strength 0.35 --short "<idea>"`
+- Local fallback draft: `tw draft --no-llm --short "<idea>"`
 - Context-only request: `tw draft --context-only --print-prompt-path --short "<idea>"`
 - New thread: `tw draft --thread "<idea>"`
 - Build log from current repo: `tw draft --build-log "<update>"`
-- Refine latest: `tw refine latest --pass human`
-- Review latest: `tw review latest`
-- List queue: `tw queue`
+- Show active draft: `tw show`
+- Edit active draft through Codex CLI: `tw edit "<instruction>"`
+- Refine active draft: `tw refine --pass human`
+- Review active draft: `tw review`
+- List drafts: `tw drafts`
+- Switch active draft: `tw use 2`
 - Search memory: `tw search "<query>"`
-- Algorithm review: `tw algo-review latest`
-- Media plan: `tw media-plan latest`
-- Distribution plan: `tw distribution-plan latest`
-- Algorithm-aware draft: `tw draft --algo-aware --short "<idea>"`
+- Smart search through Codex CLI: `tw search --smart "<query>"`
+- Algorithm review layers: `tw algo`
+- Algorithm review: `tw algo-review`
+- Media plan: `tw media-plan`
+- Distribution plan: `tw distribution-plan`
+- Disable X-fit review once: `tw draft --no-algo-aware --short "<idea>"`
 - Import Telegram identity pack: `tw tg-import "<path>" --profile tg_crypto_clean`
 - Build style profile: `tw style-build tg_crypto_clean --auto`
 - Refresh style profile: `tw style-refresh tg_crypto_clean`
 - Style stats: `tw style-stats tg_crypto_clean`
 - Curate style profile: `tw style-curate tg_crypto_clean`
 - Identity-style draft: `tw draft --identity-style tg_crypto_clean --identity-strength 0.35 --short "<idea>"`
-- Identity/style review: `tw style-review latest --profile tg_crypto_clean`
+- Identity/style review: `tw style-review --profile tg_crypto_clean`
 - Sync own X posts read-only: `tw sync-posted`
 - Analyze own posts: `tw analyze-own --sync`
 - Import peer posts read-only: `tw x-read @handle --limit 100`
@@ -91,13 +98,16 @@ Expected generated files:
 - `16_llm_parse_report.md`
 - `AGENTS.override.md`
 - `.codex_home/AGENTS.md`
+- active draft pointer: `~/twitter-system/state/current_draft.txt`
+- edit artifacts: `17_edit_request.md`, `18_edit_raw_output.md`, `19_edit_parse_report.md`, and `revisions/*.md`
 
 Rules:
 - Source project `AGENTS.md` may be summarized into the context bundle.
 - Source project `AGENTS.md` must not become active instructions for content generation.
 - Draft folder `AGENTS.override.md` is the content-generation instruction layer.
 - Default configurable model is `gpt-5.5` with `reasoning_effort=xhigh` and `speed=fast`.
-- If LLM mode fails, use fallback draft artifacts and report the failure in `16_llm_parse_report.md`.
+- Normal `tw draft` requires Codex CLI. If Codex is missing or returns invalid output, report the failure in `16_llm_parse_report.md` and fail the command.
+- Use `--no-llm` only when the user explicitly wants a local fallback draft.
 
 ## X Algorithm-Aware Drafting
 

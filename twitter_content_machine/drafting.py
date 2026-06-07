@@ -11,6 +11,7 @@ from .llm import resolve_llm_mode, run_llm
 from .models import DraftResult
 from .project_context import detect_project, refresh_project_context
 from .review import anti_gpt_pass, critique_text, redact_secrets, score_text
+from .state import set_current_draft
 from .utils import format_list, get_now, iso_now, short_hash, slugify
 from .workspace import ensure_workspace, read_profile
 from .x_read import sync_posted
@@ -275,6 +276,7 @@ identity_strength: {identity_strength if identity_style_profile else ''}
             ),
         )
         upsert_fts(conn, "drafts_fts", (draft_id, slugify(safe_text), final, ""))
+    set_current_draft(draft_id)
     if copy:
         try:
             import pyperclip  # type: ignore
@@ -304,7 +306,8 @@ identity_strength: {identity_strength if identity_style_profile else ''}
             encoding="utf-8",
         )
     else:
-        result = run_llm(selected_mode, bundle_paths.request, folder, config, require_llm=require_llm)
+        must_have_llm = require_llm or selected_mode == "codex"
+        result = run_llm(selected_mode, bundle_paths.request, folder, config, require_llm=False)
         if result.attempted:
             (folder / "15_llm_raw_output.md").write_text(result.raw_output, encoding="utf-8")
         if result.ok:
@@ -334,6 +337,8 @@ identity_strength: {identity_strength if identity_style_profile else ''}
 """,
             encoding="utf-8",
         )
+        if must_have_llm and not result.ok:
+            raise RuntimeError(f"Codex generation failed: {result.message}")
     return DraftResult(draft_id, folder, final)
 
 

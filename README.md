@@ -30,22 +30,63 @@ tw idea "read an article about risk regimes; seems useful for thinking about bac
 tw draft --short "today I realized my backtest execution model is fake"
 tw draft --thread --url "https://example.com/article"
 tw draft --build-log "cache key ignored branch and polluted results"
-tw draft --short --identity-style tg_crypto_clean --identity-strength 0.35 "today I misunderstood fills"
-tw draft --llm manual --algo-aware --short "today I realized my backtest execution model is fake"
+tw draft "today I misunderstood fills"
+tw draft --no-llm --short "today I realized my backtest execution model is fake"
 tw draft --context-only --print-prompt-path --short "raw idea"
-tw refine latest --pass human
-tw review latest
-tw style-review latest --profile tg_crypto_clean
-tw algo-review latest
-tw media-plan latest
-tw distribution-plan latest
-tw queue
-tw open latest
+tw show
+tw edit "make it shorter"
+tw review
+tw algo
+tw ready
+tw drafts
+tw use 2
+tw path
+tw search --smart "execution assumptions"
 tw sync-posted
 tw analyze-own --sync
 ```
 
-`tw open latest --print-path` prints the folder path without opening a GUI.
+`tw draft "..."` makes the new draft active. Most draft commands can omit
+`draft_id` and operate on that active draft. `tw path` prints the active draft
+folder without opening a GUI.
+
+Russian CLI guide:
+
+```text
+docs/cli_flex_npplan_ru.md
+```
+
+## Active Draft UX
+
+The current draft pointer is stored centrally:
+
+```text
+~/twitter-system/state/current_draft.txt
+```
+
+Use one-draft-at-a-time commands:
+
+```powershell
+tw show
+tw path
+tw edit "make it less certain"
+tw review
+tw algo
+tw ready
+tw reject
+tw posted --url "https://x.com/..."
+```
+
+Switch focus:
+
+```powershell
+tw drafts
+tw use 2
+tw use latest
+```
+
+Old explicit ids still work, for example `tw show latest` or
+`tw algo-review <draft_id>`.
 
 ## Workspace Layout
 
@@ -57,7 +98,9 @@ tw analyze-own --sync
   identity_styles/
   inbox/
   drafts/
+  state/
   projects/
+  searches/
   sources/
     articles/
     x_posts/
@@ -88,12 +131,12 @@ Files:
 04_critique.md
 05_selected.md
 06_final_candidate.md
-07_algorithm_review.md    # when --algo-aware or tw algo-review is used
-08_media_plan.md          # when --algo-aware or tw media-plan is used
-09_distribution_plan.md   # when --algo-aware or tw distribution-plan is used
-10_identity_style_review.md # when --identity-style or tw style-review is used
-11_examples_used.md         # when --identity-style is used
-12_risk_flags.md            # when --identity-style is used
+07_algorithm_review.md    # default, unless --no-algo-aware is used
+08_media_plan.md          # default, unless --no-algo-aware is used
+09_distribution_plan.md   # default, unless --no-algo-aware is used
+10_identity_style_review.md # when tg_crypto_clean/default or --identity-style is active
+11_examples_used.md         # when identity_style is active
+12_risk_flags.md            # when identity_style is active
 13_context_bundle.md
 13_context_bundle.json
 14_llm_request.md
@@ -133,7 +176,7 @@ Defaults in `config.toml`:
 
 ```toml
 [llm]
-mode = "manual"
+mode = "auto"
 model = "gpt-5.5"
 reasoning_effort = "xhigh"
 speed = "fast"
@@ -143,8 +186,8 @@ codex_isolate_home = true
 Modes:
 
 ```powershell
-tw draft --llm manual --short "raw idea"
-tw draft --llm auto --short "raw idea"
+tw draft "raw idea"
+tw draft --no-llm --short "raw idea"
 tw draft --llm codex --model gpt-5.5 --reasoning-effort xhigh --speed fast --short "raw idea"
 tw draft --context-only --print-prompt-path --short "raw idea"
 ```
@@ -156,7 +199,8 @@ Critical behavior:
 - Content generation runs from the draft folder, not from the source project.
 - `AGENTS.override.md` and `.codex_home/AGENTS.md` are content-generation instructions only.
 - Source project `AGENTS.md` may be summarized as context, but must not become active instructions for drafting.
-- If LLM generation fails, fallback draft files remain and `16_llm_parse_report.md` records the failure.
+- `tw draft "..."` requires Codex CLI; if Codex is missing or returns invalid output, the command fails after writing the report.
+- `--no-llm` and `--context-only` are explicit local fallback/debug modes.
 
 ## Algorithm-Aware Review
 
@@ -172,15 +216,16 @@ It optimizes for personalized recommendation fit:
 Run after creating a draft:
 
 ```bash
-tw algo-review latest
-tw media-plan latest
-tw distribution-plan latest
+tw algo
+tw algo-review
+tw media-plan
+tw distribution-plan
 ```
 
 Or generate all review artifacts at draft time:
 
 ```bash
-tw draft --algo-aware --short "small build note from today's backtest"
+tw draft --short "small build note from today's backtest"
 ```
 
 The decision label `publish candidate` means "safe enough for a human to
@@ -210,8 +255,8 @@ C:\Users\v-353\Downloads\AyuGram Desktop\ChatExport_2026-06-07\result.json
 Use it while drafting:
 
 ```bash
-tw draft --short --algo-aware --identity-style tg_crypto_clean --identity-strength 0.35 "raw idea"
-tw style-review latest --profile tg_crypto_clean
+tw draft --short "raw idea"
+tw style-review --profile tg_crypto_clean
 ```
 
 Rules:
@@ -269,7 +314,12 @@ and identity/style profile metadata. FTS5 powers:
 
 ```bash
 tw search "backtest execution"
+tw search --smart "backtest execution"
 ```
+
+Plain `tw search` is lexical. `tw search --smart` gathers local memory
+candidates and asks Codex CLI to rank/explain them in a read-only search folder
+under `~/twitter-system/searches/`.
 
 ## X/Twitter Sync
 
@@ -393,8 +443,8 @@ $env:TWITTER_SYSTEM_ROOT = ".tmp-twitter-system\identity-smoke"
 python -m twitter_content_machine ensure
 python -m twitter_content_machine tg-import "C:\Users\v-353\Downloads\tg_identity_pack.zip" --profile tg_crypto_clean
 python -m twitter_content_machine style-build tg_crypto_clean --auto
-python -m twitter_content_machine draft --llm manual --short --algo-aware --identity-style tg_crypto_clean --identity-strength 0.35 "I realized my backtest execution assumptions are fake"
-python -m twitter_content_machine style-review latest --profile tg_crypto_clean
+python -m twitter_content_machine draft --no-llm --short "I realized my backtest execution assumptions are fake"
+python -m twitter_content_machine style-review --profile tg_crypto_clean
 python -m twitter_content_machine queue --limit 1
 ```
 

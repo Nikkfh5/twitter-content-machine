@@ -126,10 +126,12 @@ WORKSPACE_DIRS = [
     "posted",
     "rejected",
     "projects",
+    "state",
     "sources/articles",
     "sources/x_posts",
     "sources/telegram",
     "sources/notes",
+    "searches",
     "db",
     "logs",
 ]
