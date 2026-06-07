@@ -11,13 +11,14 @@ from .article import store_article
 from .config import load_config
 from .db import connect_db, resolve_draft_id, search_memory, upsert_fts
 from .drafting import create_draft, refine_draft, review_draft, set_draft_status
-from .identity_style import style_build, style_curate, style_review
+from .identity_style import auto_select_examples, style_build, style_curate, style_refresh, style_review, write_style_stats
 from .llm import codex_available, mode_description
 from .project_context import detect_project, refresh_project_context
 from .telegram_import import import_telegram
 from .utils import iso_now, short_hash
 from .workspace import ensure_workspace
-from .x_read import sync_posted
+from .x_analysis import analyze_own_posts, analyze_peer_posts
+from .x_read import sync_posted, x_read as x_read_import
 
 
 def save_idea(text: str, cwd: Path | None = None, url: str | None = None, tags: str = "") -> str:
@@ -113,10 +114,19 @@ def _cmd_draft(args: argparse.Namespace, cwd: Path | None) -> int:
         args.copy,
         args.identity_style,
         args.identity_strength if args.identity_style else 0.0,
+        args.llm,
+        args.model,
+        args.reasoning_effort,
+        args.speed,
+        args.require_llm,
+        args.no_llm,
+        args.context_only,
     )
     algo_paths = write_all_algorithm_layers(draft.id) if args.algo_aware else None
     print(f"draft: {draft.id}")
     print(f"path: {draft.folder}")
+    if args.print_prompt_path:
+        print(draft.folder / "14_llm_request.md")
     if algo_paths:
         print("algorithm-aware review:")
         print(artifact_paths(algo_paths))
@@ -135,7 +145,12 @@ def _cmd_article(args: argparse.Namespace) -> int:
 
 def _cmd_x_read(args: argparse.Namespace) -> int:
     ensure_workspace()
-    print("read-only X import provider is not configured in MVP. No writes attempted.")
+    result = x_read_import(args.username_or_url, args.limit)
+    print(result.message)
+    if result.imported:
+        print(f"imported: {result.imported}")
+    if result.imported == 0 and "complete" not in result.message.lower():
+        return 1
     return 0
 
 
@@ -186,7 +201,20 @@ def _cmd_tg_import(args: argparse.Namespace) -> int:
 
 
 def _cmd_style_build(args: argparse.Namespace) -> int:
-    print(style_build(args.profile))
+    path = style_build(args.profile)
+    print(path)
+    if args.auto:
+        print(auto_select_examples(args.profile))
+    return 0
+
+
+def _cmd_style_refresh(args: argparse.Namespace) -> int:
+    print(style_refresh(args.profile))
+    return 0
+
+
+def _cmd_style_stats(args: argparse.Namespace) -> int:
+    print(write_style_stats(args.profile))
     return 0
 
 
@@ -249,12 +277,32 @@ def _cmd_search(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_analyze_own(args: argparse.Namespace) -> int:
+    ensure_workspace()
+    if args.sync:
+        result = sync_posted()
+        print(result.message)
+    print(analyze_own_posts())
+    return 0
+
+
+def _cmd_analyze_peer(args: argparse.Namespace) -> int:
+    ensure_workspace()
+    result = x_read_import(args.username_or_url, args.limit)
+    print(result.message)
+    print(analyze_peer_posts(args.username_or_url))
+    return 0
+
+
 def _cmd_doctor(args: argparse.Namespace) -> int:
     workspace = ensure_workspace()
     config = load_config(workspace.root)
     print(f"workspace: {workspace.root}")
     print(f"db: {workspace.db_path}")
     print(f"llm: {config.llm_mode} ({mode_description(config.llm_mode)})")
+    print(f"llm model: {config.llm_model}")
+    print(f"llm reasoning_effort: {config.llm_reasoning_effort}")
+    print(f"llm speed: {config.llm_speed}")
     print(f"codex CLI: {'available' if codex_available() else 'not detected'}")
     print(f"x provider: {config.x_provider}")
     print(f"x readonly: {config.x_readonly}")
@@ -313,6 +361,14 @@ def build_parser() -> argparse.ArgumentParser:
     draft.add_argument("--algo-aware", action="store_true")
     draft.add_argument("--identity-style")
     draft.add_argument("--identity-strength", type=float, default=0.35)
+    draft.add_argument("--llm", choices=["auto", "manual", "codex", "openai-api"])
+    draft.add_argument("--model")
+    draft.add_argument("--reasoning-effort", choices=["low", "medium", "high", "xhigh"])
+    draft.add_argument("--speed")
+    draft.add_argument("--require-llm", action="store_true")
+    draft.add_argument("--no-llm", action="store_true")
+    draft.add_argument("--context-only", action="store_true")
+    draft.add_argument("--print-prompt-path", action="store_true")
     draft.add_argument("text", nargs="*")
     draft.set_defaults(func=_cmd_draft)
 
@@ -322,6 +378,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     x_read = sub.add_parser("x-read")
     x_read.add_argument("username_or_url")
+    x_read.add_argument("--limit", type=int, default=100)
     x_read.set_defaults(func=_cmd_x_read)
 
     sub.add_parser("sync-posted").set_defaults(func=_cmd_sync_posted)
@@ -355,7 +412,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     style_build_cmd = sub.add_parser("style-build")
     style_build_cmd.add_argument("profile")
+    style_build_cmd.add_argument("--auto", action="store_true")
     style_build_cmd.set_defaults(func=_cmd_style_build)
+
+    style_refresh_cmd = sub.add_parser("style-refresh")
+    style_refresh_cmd.add_argument("profile")
+    style_refresh_cmd.set_defaults(func=_cmd_style_refresh)
+
+    style_stats_cmd = sub.add_parser("style-stats")
+    style_stats_cmd.add_argument("profile")
+    style_stats_cmd.set_defaults(func=_cmd_style_stats)
 
     style_curate_cmd = sub.add_parser("style-curate")
     style_curate_cmd.add_argument("profile")
@@ -398,6 +464,15 @@ def build_parser() -> argparse.ArgumentParser:
     search.set_defaults(func=_cmd_search)
 
     sub.add_parser("doctor").set_defaults(func=_cmd_doctor)
+
+    analyze_own = sub.add_parser("analyze-own")
+    analyze_own.add_argument("--sync", action="store_true")
+    analyze_own.set_defaults(func=_cmd_analyze_own)
+
+    analyze_peer = sub.add_parser("analyze-peer")
+    analyze_peer.add_argument("username_or_url")
+    analyze_peer.add_argument("--limit", type=int, default=100)
+    analyze_peer.set_defaults(func=_cmd_analyze_peer)
 
     refresh = sub.add_parser("refresh-context")
     refresh.add_argument("--force", action="store_true")

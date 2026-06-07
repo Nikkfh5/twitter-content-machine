@@ -13,8 +13,7 @@ from .x_read import sync_posted
 
 
 def tw_search_memory(query: str, project_id: str | None = None, limit: int = 10) -> list[dict[str, str]]:
-    del project_id
-    return search_memory(query, limit)
+    return search_memory(query, limit, project_id=project_id, include_global=True)
 
 
 def tw_get_project_context(cwd: str | None = None) -> dict[str, str]:

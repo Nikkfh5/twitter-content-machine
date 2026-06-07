@@ -15,11 +15,12 @@ Default behavior:
 5. Refresh project context centrally.
 6. Search memory for related old drafts/posts.
 7. If identity/style is configured, use it at safe strength <= 0.35 unless user asks otherwise.
-8. Create a dated draft folder.
-9. Produce variants + critique + final candidate.
-10. Run X-fit review if algo-aware.
-11. Run identity/style review if identity-style is active.
-12. Keep all source/context files for debugging.
+8. Create a dated draft folder with `13_context_bundle.md/json` and `14_llm_request.md`.
+9. Prefer `tw draft --llm auto --algo-aware --identity-style tg_crypto_clean --identity-strength 0.35` when identity_style exists.
+10. Produce variants + critique + final candidate through the CLI.
+11. Run X-fit review if algo-aware.
+12. Run identity/style review if identity-style is active.
+13. Keep all source/context files for debugging.
 
 If the user did not specify format, ask or infer one of:
 - short
@@ -43,10 +44,13 @@ Never:
 - leak private details
 - create files in the current project unless explicitly asked
 - imitate forwarded Telegram posts as the user's style
+- manually write a tweet if the CLI can create a draft
 
 ## Commands
 
 - New short draft: `tw draft --short "<idea>"`
+- Default algo/identity draft: `tw draft --llm auto --algo-aware --identity-style tg_crypto_clean --identity-strength 0.35 --short "<idea>"`
+- Context-only request: `tw draft --context-only --print-prompt-path --short "<idea>"`
 - New thread: `tw draft --thread "<idea>"`
 - Build log from current repo: `tw draft --build-log "<update>"`
 - Refine latest: `tw refine latest --pass human`
@@ -58,16 +62,42 @@ Never:
 - Distribution plan: `tw distribution-plan latest`
 - Algorithm-aware draft: `tw draft --algo-aware --short "<idea>"`
 - Import Telegram identity pack: `tw tg-import "<path>" --profile tg_crypto_clean`
-- Build style profile: `tw style-build tg_crypto_clean`
+- Build style profile: `tw style-build tg_crypto_clean --auto`
+- Refresh style profile: `tw style-refresh tg_crypto_clean`
+- Style stats: `tw style-stats tg_crypto_clean`
 - Curate style profile: `tw style-curate tg_crypto_clean`
 - Identity-style draft: `tw draft --identity-style tg_crypto_clean --identity-strength 0.35 --short "<idea>"`
 - Identity/style review: `tw style-review latest --profile tg_crypto_clean`
+- Sync own X posts read-only: `tw sync-posted`
+- Analyze own posts: `tw analyze-own --sync`
+- Import peer posts read-only: `tw x-read @handle --limit 100`
+- Analyze peer posts: `tw analyze-peer @handle --limit 100`
 
 If `tw` is unavailable, tell the user to install from the repo with:
 
 ```bash
 pip install -e .
 ```
+
+## Context Bundle / Isolated Generation
+
+`tw draft` can be run from any project folder, but content generation must use
+the generated draft folder as the active context.
+
+Expected generated files:
+- `13_context_bundle.md`
+- `13_context_bundle.json`
+- `14_llm_request.md`
+- `16_llm_parse_report.md`
+- `AGENTS.override.md`
+- `.codex_home/AGENTS.md`
+
+Rules:
+- Source project `AGENTS.md` may be summarized into the context bundle.
+- Source project `AGENTS.md` must not become active instructions for content generation.
+- Draft folder `AGENTS.override.md` is the content-generation instruction layer.
+- Default configurable model is `gpt-5.5` with `reasoning_effort=xhigh` and `speed=fast`.
+- If LLM mode fails, use fallback draft artifacts and report the failure in `16_llm_parse_report.md`.
 
 ## X Algorithm-Aware Drafting
 

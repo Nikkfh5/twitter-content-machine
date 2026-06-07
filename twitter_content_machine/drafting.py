@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .config import load_config
+from .context_bundle import build_context_bundle
 from .db import connect_db, resolve_draft_id, search_memory, upsert_fts
+from .generation_workspace import prepare_generation_workspace
 from .identity_style import identity_brief_context, write_identity_artifacts
+from .llm import resolve_llm_mode, run_llm
 from .models import DraftResult
 from .project_context import detect_project, refresh_project_context
 from .review import anti_gpt_pass, critique_text, redact_secrets, score_text
@@ -157,8 +161,25 @@ def create_draft(
     copy: bool = False,
     identity_style_profile: str | None = None,
     identity_strength: float = 0.0,
+    llm_mode: str | None = None,
+    llm_model: str | None = None,
+    reasoning_effort: str | None = None,
+    speed: str | None = None,
+    require_llm: bool = False,
+    no_llm: bool = False,
+    context_only: bool = False,
 ) -> DraftResult:
     workspace = ensure_workspace()
+    config = load_config(workspace.root)
+    if llm_model or reasoning_effort or speed:
+        from dataclasses import replace
+
+        config = replace(
+            config,
+            llm_model=llm_model or config.llm_model,
+            llm_reasoning_effort=reasoning_effort or config.llm_reasoning_effort,
+            llm_speed=speed or config.llm_speed,
+        )
     sync_posted()
     project = detect_project(Path(cwd) if cwd else None)
     context = refresh_project_context(project)
@@ -263,6 +284,56 @@ identity_strength: {identity_strength if identity_style_profile else ''}
             pass
     if identity_style_profile:
         write_identity_artifacts(draft_id, identity_style_profile, identity_strength)
+    bundle_paths = build_context_bundle(
+        draft_id=draft_id,
+        draft_folder=folder,
+        raw_input=safe_text,
+        draft_type=draft_type,
+        cwd=Path(cwd) if cwd else None,
+        project=project,
+        project_context=context,
+        config=config,
+        source_url=url,
+        identity_context=identity_context,
+    )
+    prepare_generation_workspace(folder, config)
+    selected_mode = resolve_llm_mode(llm_mode, config, no_llm=no_llm or context_only)
+    if context_only:
+        (folder / "16_llm_parse_report.md").write_text(
+            "# LLM Parse Report\n\n- status: context_only\n- llm_attempted: false\n",
+            encoding="utf-8",
+        )
+    else:
+        result = run_llm(selected_mode, bundle_paths.request, folder, config, require_llm=require_llm)
+        if result.attempted:
+            (folder / "15_llm_raw_output.md").write_text(result.raw_output, encoding="utf-8")
+        if result.ok:
+            data = result.parsed.data
+            variants_text = "# Variants\n\n" + "\n\n".join(
+                f"## Variant {item.get('id', '')}: {item.get('name', '')}\n{item.get('text', '')}\n\nIntent: {item.get('intent', '')}\nWhy: {item.get('why_it_might_work', '')}\nRisks: {', '.join(item.get('risks', []))}"
+                for item in data["variants"]
+            )
+            critique_text_out = "# Critique\n\n" + "\n".join(f"- {key}: {value}" for key, value in data["critique"].items())
+            selected_id = data["selected_variant_id"]
+            selected_text = next((item["text"] for item in data["variants"] if item["id"] == selected_id), data["final_candidate"])
+            final = anti_gpt_pass(str(data["final_candidate"]))
+            (folder / "03_variants.md").write_text(variants_text + "\n", encoding="utf-8")
+            (folder / "04_critique.md").write_text(critique_text_out + "\n", encoding="utf-8")
+            (folder / "05_selected.md").write_text(f"# Selected\n\n{selected_text}\n", encoding="utf-8")
+            (folder / "06_final_candidate.md").write_text(final + "\n", encoding="utf-8")
+            with connect_db() as conn:
+                conn.execute("update drafts set final_text = ?, selected_variant = ? where id = ?", (final, selected_id, draft_id))
+        (folder / "16_llm_parse_report.md").write_text(
+            f"""# LLM Parse Report
+
+- mode: {selected_mode}
+- attempted: {str(result.attempted).lower()}
+- ok: {str(result.ok).lower()}
+- message: {result.message}
+- parse_error: {result.parsed.error}
+""",
+            encoding="utf-8",
+        )
     return DraftResult(draft_id, folder, final)
 
 

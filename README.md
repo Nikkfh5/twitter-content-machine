@@ -31,6 +31,8 @@ tw draft --short "today I realized my backtest execution model is fake"
 tw draft --thread --url "https://example.com/article"
 tw draft --build-log "cache key ignored branch and polluted results"
 tw draft --short --identity-style tg_crypto_clean --identity-strength 0.35 "today I misunderstood fills"
+tw draft --llm manual --algo-aware --short "today I realized my backtest execution model is fake"
+tw draft --context-only --print-prompt-path --short "raw idea"
 tw refine latest --pass human
 tw review latest
 tw style-review latest --profile tg_crypto_clean
@@ -40,6 +42,7 @@ tw distribution-plan latest
 tw queue
 tw open latest
 tw sync-posted
+tw analyze-own --sync
 ```
 
 `tw open latest --print-path` prints the folder path without opening a GUI.
@@ -91,6 +94,13 @@ Files:
 10_identity_style_review.md # when --identity-style or tw style-review is used
 11_examples_used.md         # when --identity-style is used
 12_risk_flags.md            # when --identity-style is used
+13_context_bundle.md
+13_context_bundle.json
+14_llm_request.md
+15_llm_raw_output.md       # when an LLM is attempted
+16_llm_parse_report.md
+AGENTS.override.md
+.codex_home/AGENTS.md     # when isolated Codex home is enabled
 prompt_to_codex.md
 meta.yaml
 ```
@@ -103,6 +113,50 @@ Generation is a workshop, not a fake polished final answer:
 - critique
 - anti-GPT pass
 - final candidate
+
+## LLM / Codex Generation
+
+Every draft now gets an inspectable context bundle before any model call:
+
+```text
+source project cwd
+  -> central project context
+  -> related memory
+  -> identity_style examples
+  -> 13_context_bundle.md/json
+  -> 14_llm_request.md
+  -> isolated draft folder generation
+  -> parsed variants/final
+```
+
+Defaults in `config.toml`:
+
+```toml
+[llm]
+mode = "manual"
+model = "gpt-5.5"
+reasoning_effort = "xhigh"
+speed = "fast"
+codex_isolate_home = true
+```
+
+Modes:
+
+```powershell
+tw draft --llm manual --short "raw idea"
+tw draft --llm auto --short "raw idea"
+tw draft --llm codex --model gpt-5.5 --reasoning-effort xhigh --speed fast --short "raw idea"
+tw draft --context-only --print-prompt-path --short "raw idea"
+```
+
+Critical behavior:
+
+- `tw` may be launched from any project folder.
+- Source project context is summarized into the bundle.
+- Content generation runs from the draft folder, not from the source project.
+- `AGENTS.override.md` and `.codex_home/AGENTS.md` are content-generation instructions only.
+- Source project `AGENTS.md` may be summarized as context, but must not become active instructions for drafting.
+- If LLM generation fails, fallback draft files remain and `16_llm_parse_report.md` records the failure.
 
 ## Algorithm-Aware Review
 
@@ -139,7 +193,9 @@ Import the prepared Telegram identity/style package or a raw Telegram Desktop
 
 ```powershell
 tw tg-import "C:\Users\v-353\Downloads\tg_identity_pack.zip" --profile tg_crypto_clean
-tw style-build tg_crypto_clean
+tw style-build tg_crypto_clean --auto
+tw style-refresh tg_crypto_clean
+tw style-stats tg_crypto_clean
 tw style-curate tg_crypto_clean
 ```
 
@@ -164,8 +220,7 @@ Rules:
 - `forwarded_other` messages are stored as topic/source memory, not default style examples
 - curated `private` and `reject` examples must never be used for generation
 - identity strength above `0.6` is risky and should be manually reviewed
-- `style-curate` currently creates a Markdown curation queue; it is not a full
-  interactive labeling UI yet
+- `style-build --auto` is the default fast path; manual `style-curate` is optional
 
 ## Project Context
 
@@ -227,6 +282,35 @@ readonly = true
 ```
 
 `tw sync-posted` exits cleanly when disabled. MVP has no write/post command and no publish MCP tool.
+
+Configure read-only X API import:
+
+```toml
+[x]
+provider = "x_api"
+user_id = "<your-user-id>"
+readonly = true
+max_import = 200
+exclude_retweets = true
+```
+
+Environment:
+
+```powershell
+$env:X_BEARER_TOKEN = "<read-only bearer token>"
+```
+
+Commands:
+
+```powershell
+tw sync-posted
+tw x-read @handle --limit 100
+tw analyze-own --sync
+tw analyze-peer @handle --limit 100
+```
+
+`sync-posted` imports own recent posts into local memory. `x-read` imports peer
+posts as sources under `sources/x_posts/`; it does not treat them as user style.
 
 ## MCP
 
@@ -308,11 +392,11 @@ $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'; python -m pytest -q
 $env:TWITTER_SYSTEM_ROOT = ".tmp-twitter-system\identity-smoke"
 python -m twitter_content_machine ensure
 python -m twitter_content_machine tg-import "C:\Users\v-353\Downloads\tg_identity_pack.zip" --profile tg_crypto_clean
-python -m twitter_content_machine style-build tg_crypto_clean
-python -m twitter_content_machine draft --short --algo-aware --identity-style tg_crypto_clean --identity-strength 0.35 "I realized my backtest execution assumptions are fake"
+python -m twitter_content_machine style-build tg_crypto_clean --auto
+python -m twitter_content_machine draft --llm manual --short --algo-aware --identity-style tg_crypto_clean --identity-strength 0.35 "I realized my backtest execution assumptions are fake"
 python -m twitter_content_machine style-review latest --profile tg_crypto_clean
 python -m twitter_content_machine queue --limit 1
 ```
 
-Expected: no posting, dated draft folder, `07_*` through `12_*` review files,
+Expected: no posting, dated draft folder, `07_*` through `16_*` review/context files,
 and no publish MCP tool.

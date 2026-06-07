@@ -163,33 +163,73 @@ def upsert_fts(conn: sqlite3.Connection, table: str, values: tuple[str, ...]) ->
     conn.execute(f"insert into {table} values ({placeholders})", values)
 
 
-def search_memory(query: str, limit: int = 10) -> list[dict[str, str]]:
+def _matches(text: str, query: str) -> bool:
+    lowered = text.lower()
+    return all(part.lower() in lowered for part in query.split())
+
+
+def search_memory(
+    query: str,
+    limit: int = 10,
+    project_id: str | None = None,
+    include_global: bool = True,
+    kinds: list[str] | None = None,
+) -> list[dict[str, str]]:
     query = query.strip()
     if not query:
         return []
     results: list[dict[str, str]] = []
     with connect_db() as conn:
-        searches = [
-            ("idea", "ideas_fts", "raw_text"),
-            ("draft", "drafts_fts", "final_text"),
-            ("post", "posts_fts", "text"),
-            ("source", "sources_fts", "summary"),
-            ("telegram", "telegram_messages_fts", "text_clean"),
-        ]
-        for kind, table, column in searches:
-            try:
-                rows = conn.execute(
-                    f"select id, {column} as text from {table} where {table} match ? limit ?",
-                    (query, limit),
-                ).fetchall()
-            except sqlite3.OperationalError:
-                rows = conn.execute(
-                    f"select id, {column} as text from {table} where {column} like ? limit ?",
-                    (f"%{query}%", limit),
-                ).fetchall()
+        requested = set(kinds or ["idea", "draft", "post", "source", "telegram"])
+        if "idea" in requested:
+            rows = conn.execute("select id, project_id, raw_text from ideas").fetchall()
             for row in rows:
-                results.append({"type": kind, "id": row["id"], "text": row["text"] or ""})
-    return results[:limit]
+                text = row["raw_text"] or ""
+                if _matches(text, query) and (include_global or not project_id or row["project_id"] == project_id):
+                    results.append({"type": "idea", "kind": "idea", "id": row["id"], "project_id": row["project_id"] or "", "text": text, "reason": "lexical"})
+        if "draft" in requested:
+            rows = conn.execute("select id, project_id, final_text from drafts").fetchall()
+            for row in rows:
+                text = row["final_text"] or ""
+                if _matches(text, query) and (include_global or not project_id or row["project_id"] == project_id):
+                    results.append({"type": "draft", "kind": "draft", "id": row["id"], "project_id": row["project_id"] or "", "text": text, "reason": "lexical"})
+        if "post" in requested:
+            rows = conn.execute("select id, project_id, text from posts").fetchall()
+            for row in rows:
+                text = row["text"] or ""
+                if _matches(text, query) and (include_global or not project_id or row["project_id"] == project_id):
+                    results.append({"type": "post", "kind": "post", "id": row["id"], "project_id": row["project_id"] or "", "text": text, "reason": "lexical"})
+        if "source" in requested:
+            rows = conn.execute("select id, summary, raw_text, tags from sources").fetchall()
+            for row in rows:
+                text = row["summary"] or row["raw_text"] or ""
+                if _matches(text, query):
+                    results.append({"type": "source", "kind": "source", "id": row["id"], "project_id": "", "text": text, "reason": "lexical", "tags": row["tags"] or ""})
+        if "telegram" in requested:
+            rows = conn.execute("select id, profile_name, source_role, text_clean, risk_flags from telegram_messages").fetchall()
+            for row in rows:
+                text = row["text_clean"] or ""
+                if _matches(text, query):
+                    results.append({
+                        "type": "telegram",
+                        "kind": "telegram",
+                        "id": row["id"],
+                        "project_id": "",
+                        "text": text,
+                        "source_role": row["source_role"] or "",
+                        "risk_flags": row["risk_flags"] or "",
+                        "reason": "lexical",
+                    })
+    seen: set[str] = set()
+    deduped: list[dict[str, str]] = []
+    for item in results:
+        key = item["id"] + (item.get("text") or "")[:80]
+        if key not in seen:
+            seen.add(key)
+            deduped.append(item)
+    if project_id:
+        deduped.sort(key=lambda item: 0 if item.get("project_id") == project_id else 1)
+    return deduped[:limit]
 
 
 def latest_draft_id() -> str | None:

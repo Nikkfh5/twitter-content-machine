@@ -4,6 +4,7 @@ import os
 import sqlite3
 from pathlib import Path
 import shutil
+import json
 
 import pytest
 
@@ -12,6 +13,8 @@ from twitter_content_machine.cli import run_cli
 from twitter_content_machine.config import load_config
 from twitter_content_machine.db import connect_db, resolve_draft_id
 from twitter_content_machine.drafting import create_draft
+from twitter_content_machine.llm import build_codex_invocation_plan
+from twitter_content_machine.llm_parsing import parse_llm_output
 from twitter_content_machine.project_context import detect_project, refresh_project_context
 from twitter_content_machine.review import contains_forbidden_phrase, redact_secrets
 from twitter_content_machine.workspace import ensure_workspace
@@ -39,6 +42,10 @@ def test_ensure_creates_workspace_and_is_idempotent(tw_root: Path) -> None:
 
     config = load_config(tw_root)
     assert config.default_language == "auto"
+    assert config.llm_mode == "manual"
+    assert config.llm_model == "gpt-5.5"
+    assert config.llm_reasoning_effort == "xhigh"
+    assert config.llm_speed == "fast"
     assert config.x_provider == "none"
     assert config.x_readonly is True
 
@@ -109,7 +116,7 @@ def test_draft_creates_expected_files_without_llm(tw_root: Path, tmp_path: Path)
         "meta.yaml",
     }
     assert draft.folder.name.startswith("20260606-213045-backtest-execution-assumptions-")
-    assert expected == {p.name for p in draft.folder.iterdir() if p.is_file()}
+    assert expected <= {p.name for p in draft.folder.iterdir() if p.is_file()}
     assert "Variant A" in (draft.folder / "03_variants.md").read_text(encoding="utf-8")
     assert "important to note" not in (
         draft.folder / "06_final_candidate.md"
@@ -159,6 +166,143 @@ def test_mcp_tool_registry_has_no_publish_tool() -> None:
     assert "tw_create_draft" in tool_names
     assert "tw_sync_posted_readonly" in tool_names
     assert all("publish" not in name and "post_to_x" not in name for name in tool_names)
+
+
+def test_context_only_draft_creates_bundle_and_isolated_generation_workspace(
+    tw_root: Path, tmp_path: Path
+) -> None:
+    project = tmp_path / "source-project"
+    project.mkdir()
+    (project / "README.md").write_text("# Source Project\n\nPublic context.\n", encoding="utf-8")
+    (project / "AGENTS.md").write_text("# Coding Instructions\n\nDo code things.\n", encoding="utf-8")
+    (project / ".env").write_text("SECRET_TOKEN=abc123\n", encoding="utf-8")
+    before = {p.relative_to(project) for p in project.rglob("*")}
+    ensure_workspace()
+
+    assert (
+        run_cli(
+            [
+                "draft",
+                "--context-only",
+                "--short",
+                "--identity-strength",
+                "0.35",
+                "I realized execution assumptions matter",
+            ],
+            cwd=project,
+        )
+        == 0
+    )
+
+    after = {p.relative_to(project) for p in project.rglob("*")}
+    assert before == after
+    draft_id = resolve_draft_id("latest")
+    with connect_db() as conn:
+        row = conn.execute("select folder_path from drafts where id = ?", (draft_id,)).fetchone()
+    folder = Path(row["folder_path"])
+    bundle_md = (folder / "13_context_bundle.md").read_text(encoding="utf-8")
+    bundle_json = json.loads((folder / "13_context_bundle.json").read_text(encoding="utf-8"))
+
+    assert (folder / "14_llm_request.md").exists()
+    assert (folder / "16_llm_parse_report.md").exists()
+    assert (folder / "AGENTS.override.md").exists()
+    assert (folder / ".codex_home" / "AGENTS.md").exists()
+    assert (folder / ".codex_home" / "config.toml").exists()
+    assert "Source Project" in bundle_md
+    assert "SECRET_TOKEN" not in bundle_md
+    assert bundle_json["task"]["cwd"] == str(project.resolve())
+    assert bundle_json["source_manifest"]
+    override = (folder / "AGENTS.override.md").read_text(encoding="utf-8")
+    assert "Do not inspect parent source repositories" in override
+    assert "Do code things" not in override
+
+
+def test_print_prompt_path_outputs_llm_request_path(
+    tw_root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = tmp_path / "prompt-path"
+    project.mkdir()
+    ensure_workspace()
+
+    assert run_cli(["draft", "--context-only", "--print-prompt-path", "--short", "raw idea"], cwd=project) == 0
+    output = capsys.readouterr().out
+
+    assert "14_llm_request.md" in output
+
+
+def test_llm_parser_handles_plain_and_fenced_json() -> None:
+    payload = {
+        "variants": [
+            {
+                "id": "A",
+                "name": "direct_raw",
+                "text": "Small note.",
+                "intent": "dwell",
+                "why_it_might_work": "specific",
+                "risks": [],
+            }
+        ],
+        "critique": {
+            "real_point": "ok",
+            "too_generic": False,
+            "overclaim_risk": "low",
+            "financial_advice_risk": "low",
+            "confidentiality_risk": "low",
+            "repetition_risk": "low",
+            "identity_style_risk": "low",
+            "algorithm_fit": "ok",
+        },
+        "selected_variant_id": "A",
+        "final_candidate": "Small note.",
+        "media_suggestion": {"use_media": False, "type": "none", "reason": "none"},
+        "manual_notes": [],
+    }
+
+    parsed = parse_llm_output("```json\n" + json.dumps(payload) + "\n```")
+
+    assert parsed.ok is True
+    assert parsed.data["final_candidate"] == "Small note."
+
+
+def test_llm_parser_reports_invalid_output() -> None:
+    parsed = parse_llm_output("not json")
+
+    assert parsed.ok is False
+    assert "No JSON object found" in parsed.error
+
+
+def test_codex_invocation_plan_uses_draft_folder_and_isolated_home(
+    tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace()
+
+    class Completed:
+        returncode = 0
+        stderr = ""
+
+        def __init__(self, stdout: str) -> None:
+            self.stdout = stdout
+
+    def fake_run(command, **kwargs):
+        if command == ["codex", "--help"]:
+            return Completed("Usage\nCommands:\n  exec\n")
+        if command == ["codex", "exec", "--help"]:
+            return Completed("Usage\n  --cd <DIR>\n  --model <MODEL>\n  --config <KEY=VALUE>\n")
+        return Completed("")
+
+    monkeypatch.setattr("twitter_content_machine.llm.shutil.which", lambda command: "C:/bin/codex.exe")
+    monkeypatch.setattr("twitter_content_machine.llm.subprocess.run", fake_run)
+
+    draft_folder = tmp_path / "draft"
+    draft_folder.mkdir()
+    plan = build_codex_invocation_plan("{}", draft_folder, load_config(tw_root))
+
+    assert plan.cwd == draft_folder
+    assert plan.env["CODEX_HOME"] == str(draft_folder / ".codex_home")
+    assert "--cd" in plan.command
+    assert str(draft_folder) in plan.command
+    assert "--model" in plan.command
+    assert "gpt-5.5" in plan.command
 
 
 def test_open_latest_resolves_existing_draft_without_gui(tw_root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -362,7 +506,7 @@ def test_style_build_creates_identity_support_files(tw_root: Path) -> None:
     ensure_workspace()
     assert run_cli(["tg-import", str(pack_dir), "--profile", "tg_crypto_clean"]) == 0
 
-    assert run_cli(["style-build", "tg_crypto_clean"]) == 0
+    assert run_cli(["style-build", "tg_crypto_clean", "--auto"]) == 0
 
     profile_dir = tw_root / "identity_styles" / "tg_crypto_clean"
     for name in [
@@ -373,6 +517,10 @@ def test_style_build_creates_identity_support_files(tw_root: Path) -> None:
         "anti_patterns.md",
         "adaptation_rules.md",
         "self_writing_cheatsheet.md",
+        "auto_selection_report.md",
+        "auto_gold_examples.md",
+        "auto_rejected_examples.md",
+        "style_stats.md",
     ]:
         assert (profile_dir / name).exists()
     with connect_db() as conn:
@@ -380,7 +528,33 @@ def test_style_build_creates_identity_support_files(tw_root: Path) -> None:
             "select profile_name, status from identity_style_profiles where profile_name = ?",
             ("tg_crypto_clean",),
         ).fetchone()
+        auto_forwarded = conn.execute(
+            """
+            select count(*)
+            from identity_style_examples e
+            join telegram_messages m
+              on m.profile_name = e.profile_name
+             and m.telegram_message_id = e.telegram_message_id
+            where e.label = 'auto_gold'
+              and m.source_role = 'forwarded_other'
+            """
+        ).fetchone()[0]
     assert profile["status"] == "built"
+    assert auto_forwarded == 0
+
+
+def test_style_stats_and_refresh_commands(tw_root: Path) -> None:
+    pack_dir = Path(r"C:\Users\v-353\Downloads\tg_identity_pack")
+    if not pack_dir.exists():
+        pytest.skip("identity pack folder not available")
+    ensure_workspace()
+    assert run_cli(["tg-import", str(pack_dir), "--profile", "tg_crypto_clean"]) == 0
+
+    assert run_cli(["style-refresh", "tg_crypto_clean"]) == 0
+    assert run_cli(["style-stats", "tg_crypto_clean"]) == 0
+
+    profile_dir = tw_root / "identity_styles" / "tg_crypto_clean"
+    assert (profile_dir / "style_stats.md").exists()
 
 
 def test_identity_style_draft_and_review_create_required_files(
@@ -436,3 +610,94 @@ def test_mcp_registry_exposes_identity_tools_without_publish() -> None:
     ]:
         assert name in tool_names
     assert all("publish" not in name and "post_to_x" not in name for name in tool_names)
+
+
+def test_project_aware_memory_search_prioritizes_same_project(tw_root: Path, tmp_path: Path) -> None:
+    project_a = tmp_path / "alpha"
+    project_b = tmp_path / "beta"
+    project_a.mkdir()
+    project_b.mkdir()
+    ensure_workspace()
+    assert run_cli(["idea", "same keyword from alpha project"], cwd=project_a) == 0
+    assert run_cli(["idea", "same keyword from beta project"], cwd=project_b) == 0
+    project = detect_project(project_b)
+
+    rows = mcp_server.tw_search_memory("same keyword", project_id=project.id, limit=5)
+
+    assert rows[0]["project_id"] == project.id
+    assert "beta project" in rows[0]["text"]
+
+
+def test_x_sync_imports_mocked_readonly_posts(tw_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ensure_workspace()
+    config_path = tw_root / "config.toml"
+    config_path.write_text(
+        """
+default_language = "auto"
+
+[x]
+provider = "x_api"
+user_id = "42"
+readonly = true
+max_import = 10
+exclude_retweets = true
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("X_BEARER_TOKEN", "test-token")
+
+    class FakeResponse:
+        status = 200
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {
+                    "data": [
+                        {
+                            "id": "post1",
+                            "text": "execution assumptions matter",
+                            "created_at": "2026-06-07T00:00:00Z",
+                            "conversation_id": "post1",
+                            "public_metrics": {"like_count": 3},
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def fake_urlopen(request, timeout=0):
+        assert request.full_url.startswith("https://api.x.com/2/users/42/tweets")
+        assert request.get_header("Authorization") == "Bearer test-token"
+        return FakeResponse()
+
+    monkeypatch.setattr("twitter_content_machine.x_read.request.urlopen", fake_urlopen)
+
+    result = sync_posted()
+
+    assert result.imported == 1
+    with connect_db() as conn:
+        row = conn.execute("select platform_post_id, text from posts where platform_post_id = 'post1'").fetchone()
+    assert row["text"] == "execution assumptions matter"
+
+
+def test_x_read_disabled_and_readonly_false_behaviors(tw_root: Path) -> None:
+    ensure_workspace()
+    assert sync_posted().imported == 0
+    config_path = tw_root / "config.toml"
+    config_path.write_text(
+        """
+[x]
+provider = "x_api"
+readonly = false
+""",
+        encoding="utf-8",
+    )
+
+    result = sync_posted()
+
+    assert "Refusing" in result.message

@@ -25,6 +25,36 @@ Architecture:
 - Telegram identity/style layer: `twitter_content_machine/telegram_import.py`,
   `twitter_content_machine/identity_style.py`, `twitter_content_machine/security.py`
 - Algorithm layer: `twitter_content_machine/algorithm_review.py`
+- LLM/context layer: `twitter_content_machine/context_bundle.py`,
+  `twitter_content_machine/generation_workspace.py`,
+  `twitter_content_machine/llm.py`, `twitter_content_machine/llm_parsing.py`
+- X read/analysis layer: `twitter_content_machine/x_read.py`,
+  `twitter_content_machine/x_analysis.py`
+
+## Critical: two AGENTS contexts
+
+This repository has two different instruction contexts.
+
+1. Repository `AGENTS.md`
+   - Used when Codex is modifying the `twitter-content-machine` codebase.
+   - Contains engineering rules, tests, safety constraints, and architecture.
+
+2. Generated draft `AGENTS.override.md`
+   - Created inside each draft folder.
+   - Used only when Codex is generating X/Twitter draft text.
+   - Must be content-specific and draft-only.
+   - Must not modify source project files.
+   - Must not publish.
+   - Must not call X write APIs.
+
+When implementing or debugging LLM generation:
+- `tw` may be invoked from any directory.
+- `tw` should collect/summarize context from that directory.
+- Codex content generation must run from the draft folder, not from the source
+  project directory.
+- Source project `AGENTS.md` may be summarized into `13_context_bundle.md/json`,
+  but must not become active instruction for content generation.
+- Prefer isolated `CODEX_HOME=<draft_folder>/.codex_home`.
 
 Setup:
 - `pip install -e .`
@@ -35,29 +65,44 @@ CLI workflow:
 - Capture: `tw idea "<text>"`, `tw capture`
 - Draft: `tw draft --short|--thread|--article-note|--build-log|--question "<text>"`
 - Algorithm-aware draft: `tw draft --algo-aware --short "<text>"`
+- LLM/context draft: `tw draft --llm manual|auto|codex|openai-api --short "<text>"`
+- Context-only bundle: `tw draft --context-only --print-prompt-path --short "<text>"`
 - Identity-style draft: `tw draft --identity-style tg_crypto_clean --identity-strength 0.35 --short "<text>"`
 - Improve/check: `tw refine latest --pass human`, `tw review latest`
 - X-fit review: `tw algo-review latest`, `tw media-plan latest`, `tw distribution-plan latest`
 - Identity/style review: `tw style-review latest --profile tg_crypto_clean`
 - Telegram import: `tw tg-import <result.json|folder|zip> --profile tg_crypto_clean`
-- Style build/curation: `tw style-build tg_crypto_clean`, `tw style-curate tg_crypto_clean`
+- Style build/curation: `tw style-build tg_crypto_clean --auto`,
+  `tw style-refresh tg_crypto_clean`, `tw style-stats tg_crypto_clean`,
+  `tw style-curate tg_crypto_clean`
 - Inspect: `tw queue`, `tw search "<query>"`, `tw open latest --print-path`
 - Project context: `tw refresh-context --force`
 - X/read-only: `tw x-read <user-or-url>`, `tw sync-posted`
+- X analysis: `tw analyze-own --sync`, `tw analyze-peer <user-or-url> --limit 100`
 - Status bookkeeping only: `tw mark-ready`, `tw reject`, `tw mark-posted --url <url>`
 - `style-curate` currently writes a Markdown curation queue, not a full
   interactive labeling UI.
+- Manual curation is optional. The fast path is `tw style-build <profile> --auto`;
+  this creates `auto_gold`, `auto_neutral`, `auto_source_only`, and `auto_reject`
+  labels.
 
 Draft artifacts:
 - Draft folders live under `~/twitter-system/drafts/YYYY/MM/<draft_id>/`.
 - Expected files: `00_raw_input.md`, `01_context_used.md`, `02_brief.md`,
   `03_variants.md`, `04_critique.md`, `05_selected.md`,
   `06_final_candidate.md`, `prompt_to_codex.md`, `meta.yaml`.
+- New LLM/context artifacts are expected on every draft:
+  `13_context_bundle.md`, `13_context_bundle.json`, `14_llm_request.md`,
+  `16_llm_parse_report.md`, `AGENTS.override.md`, and usually
+  `.codex_home/AGENTS.md`; `15_llm_raw_output.md` appears when an LLM is
+  attempted.
 - Algorithm-aware commands append `07_algorithm_review.md`,
   `08_media_plan.md`, and `09_distribution_plan.md`.
 - Identity-style commands append `10_identity_style_review.md`,
   `11_examples_used.md`, and `12_risk_flags.md`.
 - Treat generation as workshop output: variants, critique, anti-GPT pass, final candidate.
+- Default LLM config is `model = "gpt-5.5"`, `reasoning_effort = "xhigh"`,
+  `speed = "fast"`, all overrideable.
 
 Project context behavior:
 - `tw` detects the git root with `git rev-parse --show-toplevel`; fallback is cwd.
@@ -122,4 +167,4 @@ Useful checks:
 - For isolated smoke tests, prefer repo-local `.tmp-twitter-system` as
   `TWITTER_SYSTEM_ROOT`; `C:\tmp` may hit Windows permission issues here.
 - Identity smoke:
-  `$env:TWITTER_SYSTEM_ROOT='.tmp-twitter-system\identity-smoke'; python -m twitter_content_machine tg-import "C:\Users\v-353\Downloads\tg_identity_pack.zip" --profile tg_crypto_clean; python -m twitter_content_machine style-build tg_crypto_clean`
+  `$env:TWITTER_SYSTEM_ROOT='.tmp-twitter-system\identity-smoke'; python -m twitter_content_machine tg-import "C:\Users\v-353\Downloads\tg_identity_pack.zip" --profile tg_crypto_clean; python -m twitter_content_machine style-build tg_crypto_clean --auto`
