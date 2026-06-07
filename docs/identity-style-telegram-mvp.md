@@ -61,13 +61,12 @@ Expected commands:
 ```powershell
 $env:TWITTER_SYSTEM_ROOT = ".tmp-twitter-system\identity-smoke"
 python -m twitter_content_machine ensure
-python -m twitter_content_machine tg-import "C:\Users\v-353\Downloads\tg_identity_pack.zip" --profile tg_crypto_clean
-python -m twitter_content_machine style-build tg_crypto_clean
-python -m twitter_content_machine draft --short --algo-aware --identity-style tg_crypto_clean --identity-strength 0.35 "I realized my backtest execution assumptions are fake"
-python -m twitter_content_machine style-review latest --profile tg_crypto_clean
+python -m twitter_content_machine tg-import "C:\Users\v-353\Downloads\tg_identity_pack.zip"
+python -m twitter_content_machine style-build --auto
+python -m twitter_content_machine draft --no-llm "I realized my backtest execution assumptions are fake"
+python -m twitter_content_machine style-review latest
 python -m twitter_content_machine mcp serve
 ```
 
 `mcp serve` may exit with missing optional dependency, but fallback tool list
 must include local wrappers and no publish tool.
-

@@ -6,7 +6,7 @@ from typing import Any, Callable
 from .algorithm_review import write_algorithm_review, write_all_algorithm_layers
 from .db import search_memory
 from .drafting import create_draft, get_draft, refine_draft, review_draft, set_draft_status
-from .identity_style import style_build, style_curate, style_review, write_identity_artifacts
+from .identity_style import DEFAULT_IDENTITY_PROFILE, style_build, style_curate, style_learn, style_review, write_identity_artifacts
 from .project_context import detect_project, refresh_project_context
 from .telegram_import import import_telegram
 from .x_read import sync_posted
@@ -82,12 +82,12 @@ def tw_algo_review(draft_id: str) -> dict[str, str]:
     return {"path": str(path)}
 
 
-def tw_style_review(draft_id: str, profile_name: str = "tg_crypto_clean") -> dict[str, str]:
+def tw_style_review(draft_id: str, profile_name: str = DEFAULT_IDENTITY_PROFILE) -> dict[str, str]:
     path = style_review(draft_id, profile_name)
     return {"path": str(path)}
 
 
-def tw_import_telegram(path: str, profile_name: str = "tg_crypto_clean") -> dict[str, str | int]:
+def tw_import_telegram(path: str, profile_name: str = DEFAULT_IDENTITY_PROFILE) -> dict[str, str | int]:
     result = import_telegram(path, profile_name)
     return {
         "profile_name": result.profile_name,
@@ -98,12 +98,17 @@ def tw_import_telegram(path: str, profile_name: str = "tg_crypto_clean") -> dict
     }
 
 
-def tw_style_build(profile_name: str) -> dict[str, str]:
+def tw_style_build(profile_name: str = DEFAULT_IDENTITY_PROFILE) -> dict[str, str]:
     path = style_build(profile_name)
     return {"profile_dir": str(path)}
 
 
-def tw_style_curate(profile_name: str) -> dict[str, str]:
+def tw_style_learn() -> dict[str, str]:
+    path = style_learn(DEFAULT_IDENTITY_PROFILE)
+    return {"path": str(path)}
+
+
+def tw_style_curate(profile_name: str = DEFAULT_IDENTITY_PROFILE) -> dict[str, str]:
     path = style_curate(profile_name)
     return {"path": str(path)}
 
@@ -137,6 +142,7 @@ TOOLS: dict[str, Callable[..., Any]] = {
     "tw_style_review": tw_style_review,
     "tw_import_telegram": tw_import_telegram,
     "tw_style_build": tw_style_build,
+    "tw_style_learn": tw_style_learn,
     "tw_style_curate": tw_style_curate,
     "tw_mark_ready": tw_mark_ready,
     "tw_mark_posted": tw_mark_posted,

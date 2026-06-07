@@ -66,6 +66,7 @@ def test_ensure_creates_workspace_and_is_idempotent(tw_root: Path) -> None:
         "telegram_messages",
         "identity_style_profiles",
         "identity_style_examples",
+        "processed_style_examples",
         "drafts_fts",
         "telegram_messages_fts",
     } <= tables
@@ -886,6 +887,49 @@ def test_style_stats_and_refresh_commands(tw_root: Path) -> None:
     assert (profile_dir / "style_stats.md").exists()
 
 
+def test_style_learn_uses_only_approved_own_texts(
+    tw_root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = tmp_path / "style-learn-project"
+    project.mkdir()
+    ensure_workspace()
+
+    ready = create_draft("ready text about validation protocol breaking", "short", project, no_llm=True)
+    posted = create_draft("posted text about execution assumptions", "short", project, no_llm=True)
+    rejected = create_draft("rejected text about alpha 100x easy money", "short", project, no_llm=True)
+    draft_only = create_draft("draft only text that should not be style", "short", project, no_llm=True)
+
+    assert run_cli(["use", ready.id], cwd=project) == 0
+    assert run_cli(["ready"], cwd=project) == 0
+    assert run_cli(["use", posted.id], cwd=project) == 0
+    assert run_cli(["posted", "--url", "https://x.com/example/status/1"], cwd=project) == 0
+    assert run_cli(["use", rejected.id], cwd=project) == 0
+    assert run_cli(["reject"], cwd=project) == 0
+    capsys.readouterr()
+
+    assert run_cli(["style-learn"], cwd=project) == 0
+    output = capsys.readouterr().out
+
+    profile_dir = tw_root / "identity_styles" / "tg_crypto_clean"
+    assert "processed_posts_report.md" in output
+    assert (profile_dir / "processed_posts_report.md").exists()
+    assert (profile_dir / "post_gold_examples.md").exists()
+    assert (profile_dir / "style_stats.md").exists()
+
+    with connect_db() as conn:
+        rows = conn.execute(
+            "select source_kind, source_id, text, label from processed_style_examples order by source_kind, source_id"
+        ).fetchall()
+    learned_text = "\n".join(row["text"] for row in rows)
+
+    assert len(rows) == 2
+    assert {row["label"] for row in rows} == {"processed_post_gold"}
+    assert "ready text about validation" in learned_text
+    assert "posted text about execution" in learned_text
+    assert "rejected text" not in learned_text
+    assert draft_only.id not in learned_text
+
+
 def test_identity_style_draft_and_review_create_required_files(
     tw_root: Path, tmp_path: Path
 ) -> None:
@@ -936,6 +980,7 @@ def test_mcp_registry_exposes_identity_tools_without_publish() -> None:
         "tw_style_review",
         "tw_import_telegram",
         "tw_style_build",
+        "tw_style_learn",
         "tw_style_curate",
     ]:
         assert name in tool_names

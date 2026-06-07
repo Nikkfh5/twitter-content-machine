@@ -65,11 +65,10 @@ Setup:
 CLI workflow:
 - Capture: `tw idea "<text>"`, `tw capture`
 - Draft: `tw draft "<text>"` uses Codex CLI, short format, X-fit review, and default identity style when available.
-- Format override: `tw draft --short|--thread|--article-note|--build-log|--question "<text>"`
-- LLM/context draft: `tw draft --llm auto|codex --short "<text>"`
-- Local fallback draft: `tw draft --no-llm --short "<text>"`
-- Context-only bundle: `tw draft --context-only --print-prompt-path --short "<text>"`
-- Identity-style override: `tw draft --identity-style tg_crypto_clean --identity-strength 0.35 --short "<text>"`
+- Format override: `tw draft --thread|--article-note|--build-log|--question "<text>"`; `--short` is default.
+- LLM/context flags such as `--llm`, `--model`, `--reasoning-effort`,
+  `--speed`, `--no-llm`, and `--context-only` are debug/advanced, not daily UX.
+- Identity-style override/debug: `tw draft --identity-style none "<text>"`
 - Active draft UX: new drafts become current; `tw show`, `tw path`, `tw edit
   "<instruction>"`, `tw ready`, `tw reject`, and `tw algo` default to the
   current draft.
@@ -77,22 +76,24 @@ CLI workflow:
 - Native content Codex session: `tw codex --prepare`, `tw codex --prepare
   --file <notes.md> --thread`, `tw codex --run`
 - Import style/content gold references: `tw style-gold-import <zip|folder>`
-- Improve/check: `tw refine --pass human`, `tw review`
-- X-fit review: `tw algo`, `tw algo-review`, `tw media-plan`, `tw distribution-plan`
-- Identity/style review: `tw style-review --profile tg_crypto_clean`
-- Telegram import: `tw tg-import <result.json|folder|zip> --profile tg_crypto_clean`
-- Style build/curation: `tw style-build tg_crypto_clean --auto`,
-  `tw style-refresh tg_crypto_clean`, `tw style-stats tg_crypto_clean`,
-  `tw style-curate tg_crypto_clean`
-- Inspect: `tw queue`, `tw drafts`, `tw search "<query>"`,
+- Improve/check: prefer `tw edit "<instruction>"`, `tw review`; `refine --pass`
+  is legacy/debug.
+- X-fit review: prefer `tw algo`; individual `tw algo-review`, `tw media-plan`,
+  and `tw distribution-plan` are legacy/debug.
+- Identity/style review: `tw style-review`
+- Telegram import: `tw tg-import <result.json|folder|zip>`
+- Style build/curation: `tw style-build --auto`, `tw style-refresh`,
+  `tw style-stats`, `tw style-learn`, `tw style-curate`
+- Inspect: prefer `tw drafts`, `tw search "<query>"`,
   `tw search --smart "<query>"`, `tw path`
 - Project context: `tw refresh-context --force`
 - X/read-only: `tw x-read <user-or-url>`, `tw sync-posted`
 - X analysis: `tw analyze-own --sync`, `tw analyze-peer <user-or-url> --limit 100`
-- Status bookkeeping only: `tw mark-ready`, `tw reject`, `tw mark-posted --url <url>`
+- Status bookkeeping only: prefer `tw ready`, `tw reject`,
+  `tw posted --url <url>`; `mark-ready` and `mark-posted` are legacy aliases.
 - `style-curate` currently writes a Markdown curation queue, not a full
   interactive labeling UI.
-- Manual curation is optional. The fast path is `tw style-build <profile> --auto`;
+- Manual curation is optional. The fast path is `tw style-build --auto`;
   this creates `auto_gold`, `auto_neutral`, `auto_source_only`, and `auto_reject`
   labels.
 
@@ -178,6 +179,9 @@ Telegram identity/style:
 - Future backlog: let `tg_crypto_clean` learn from the user's own approved,
   manually posted, or ready drafts over time. Do not import rejected drafts,
   peer posts, source posts, or X-read external material as user style.
+- Implemented default daily command: `tw style-learn`. It uses the single
+  default style profile internally and learns only from approved own writing:
+  `ready`, `posted`, and locally stored own posts.
 
 Durable docs / resume:
 - Russian CLI guide: `docs/cli_descripsion_russion.md`
@@ -201,4 +205,4 @@ Useful checks:
 - For isolated smoke tests, prefer repo-local `.tmp-twitter-system` as
   `TWITTER_SYSTEM_ROOT`; `C:\tmp` may hit Windows permission issues here.
 - Identity smoke:
-  `$env:TWITTER_SYSTEM_ROOT='.tmp-twitter-system\identity-smoke'; python -m twitter_content_machine tg-import "C:\Users\v-353\Downloads\tg_identity_pack.zip" --profile tg_crypto_clean; python -m twitter_content_machine style-build tg_crypto_clean --auto`
+  `$env:TWITTER_SYSTEM_ROOT='.tmp-twitter-system\identity-smoke'; python -m twitter_content_machine tg-import "C:\Users\v-353\Downloads\tg_identity_pack.zip"; python -m twitter_content_machine style-build --auto`

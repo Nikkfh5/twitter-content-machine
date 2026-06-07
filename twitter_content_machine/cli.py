@@ -13,7 +13,16 @@ from .codex_session import prepare_codex_session, run_codex_session
 from .db import connect_db, resolve_draft_id, search_memory, upsert_fts
 from .drafting import create_draft, refine_draft, review_draft, set_draft_status
 from .editing import edit_draft_with_codex
-from .identity_style import auto_select_examples, style_build, style_curate, style_refresh, style_review, write_style_stats
+from .identity_style import (
+    DEFAULT_IDENTITY_PROFILE,
+    auto_select_examples,
+    style_build,
+    style_curate,
+    style_learn,
+    style_refresh,
+    style_review,
+    write_style_stats,
+)
 from .llm import codex_available, mode_description
 from .project_context import detect_project, refresh_project_context
 from .smart_search import run_smart_search
@@ -89,7 +98,7 @@ def _identity_style_from_args(args: argparse.Namespace) -> str | None:
         if args.identity_style.lower() in {"none", "off", "no", "false"}:
             return None
         return args.identity_style
-    default_profile = "tg_crypto_clean"
+    default_profile = DEFAULT_IDENTITY_PROFILE
     return default_profile if _built_identity_profile_exists(default_profile) else None
 
 
@@ -237,6 +246,11 @@ def _cmd_style_build(args: argparse.Namespace) -> int:
 
 def _cmd_style_refresh(args: argparse.Namespace) -> int:
     print(style_refresh(args.profile))
+    return 0
+
+
+def _cmd_style_learn(args: argparse.Namespace) -> int:
+    print(style_learn(args.profile))
     return 0
 
 
@@ -556,20 +570,23 @@ def build_parser() -> argparse.ArgumentParser:
     tg_import.set_defaults(func=_cmd_tg_import)
 
     style_build_cmd = sub.add_parser("style-build")
-    style_build_cmd.add_argument("profile")
+    style_build_cmd.add_argument("profile", nargs="?", default=DEFAULT_IDENTITY_PROFILE)
     style_build_cmd.add_argument("--auto", action="store_true")
     style_build_cmd.set_defaults(func=_cmd_style_build)
 
     style_refresh_cmd = sub.add_parser("style-refresh")
-    style_refresh_cmd.add_argument("profile")
+    style_refresh_cmd.add_argument("profile", nargs="?", default=DEFAULT_IDENTITY_PROFILE)
     style_refresh_cmd.set_defaults(func=_cmd_style_refresh)
 
+    style_learn_cmd = sub.add_parser("style-learn")
+    style_learn_cmd.set_defaults(profile=DEFAULT_IDENTITY_PROFILE, func=_cmd_style_learn)
+
     style_stats_cmd = sub.add_parser("style-stats")
-    style_stats_cmd.add_argument("profile")
+    style_stats_cmd.add_argument("profile", nargs="?", default=DEFAULT_IDENTITY_PROFILE)
     style_stats_cmd.set_defaults(func=_cmd_style_stats)
 
     style_curate_cmd = sub.add_parser("style-curate")
-    style_curate_cmd.add_argument("profile")
+    style_curate_cmd.add_argument("profile", nargs="?", default=DEFAULT_IDENTITY_PROFILE)
     style_curate_cmd.add_argument("--limit", type=int, default=50)
     style_curate_cmd.set_defaults(func=_cmd_style_curate)
 

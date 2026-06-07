@@ -124,11 +124,28 @@ SCHEMA = [
       created_at text
     )
     """,
+    """
+    create table if not exists processed_style_examples(
+      id text primary key,
+      profile_name text,
+      source_kind text,
+      source_id text,
+      source_draft_id text,
+      created_at text,
+      text text,
+      text_hash text,
+      label text,
+      reason text,
+      risk_flags text,
+      imported_at text
+    )
+    """,
     "create virtual table if not exists ideas_fts using fts5(id, raw_text, tags)",
     "create virtual table if not exists drafts_fts using fts5(id, title, final_text, tags)",
     "create virtual table if not exists posts_fts using fts5(id, text, tags)",
     "create virtual table if not exists sources_fts using fts5(id, title, summary, raw_text, tags)",
     "create virtual table if not exists telegram_messages_fts using fts5(id, profile_name, text_clean, labels)",
+    "create virtual table if not exists processed_style_examples_fts using fts5(id, profile_name, text, label)",
 ]
 
 

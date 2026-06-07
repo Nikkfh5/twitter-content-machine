@@ -5,7 +5,7 @@
 Со временем `tg_crypto_clean` должен учиться не только на старом Telegram-экспорте и ручном gold-собрании, но и на новых постах, которые прошли через текущую content-machine:
 
 - финальные кандидаты, которые человек реально одобрил;
-- посты, вручную опубликованные человеком и потом отмеченные через `tw mark-posted`;
+- посты, вручную опубликованные человеком и потом отмеченные через `tw posted`;
 - сильные `ready`-черновики, если пользователь явно разрешил брать их как стиль;
 - переработанные треды и article notes после финального Codex-прогона.
 
@@ -39,15 +39,17 @@
 
 ## Будущие команды
 
-Возможный минимальный набор:
+Реализованный минимальный набор:
 
 ```powershell
-tw style-learn-from-posts tg_crypto_clean --posted
-tw style-learn-from-drafts tg_crypto_clean --ready
-tw style-learn-from-drafts tg_crypto_clean --draft latest
-tw style-refresh tg_crypto_clean
-tw style-stats tg_crypto_clean
+tw style-learn
+tw style-refresh
+tw style-stats
 ```
+
+`ready` и `posted` намеренно считаются одним классом: approved own writing.
+Отдельного `--draft latest` нет: если текст надо использовать как стиль,
+сначала он должен быть явно помечен как `ready` или `posted`.
 
 Возможные метки:
 
@@ -66,7 +68,7 @@ source_only
 ```text
 ~/twitter-system/identity_styles/tg_crypto_clean/post_gold_examples.md
 ~/twitter-system/identity_styles/tg_crypto_clean/processed_posts_report.md
-~/twitter-system/identity_styles/tg_crypto_clean/post_learning_queue.md
+~/twitter-system/identity_styles/tg_crypto_clean/post_gold_examples.md
 ```
 
 В базе можно хранить отдельный источник `processed_posts`, чтобы не смешивать Telegram, X sync, peer posts и свои финальные тексты.
@@ -85,10 +87,10 @@ source_only
 
 ## MVP будущего слоя
 
-Самый простой будущий MVP:
+Реализованный MVP:
 
-1. `tw mark-posted --url ...` сохраняет пост как `own_posted`.
-2. `tw style-learn-from-posts tg_crypto_clean --posted` выбирает только безопасные собственные посты.
-3. Команда пишет `processed_posts_report.md`.
-4. `style-refresh` начинает использовать эти примеры вместе с `auto_gold` и `style_gold`.
-5. В `11_examples_used.md` явно видно, какие примеры пришли из Telegram, какие из gold-сборки, а какие из будущих опубликованных постов.
+1. `tw ready` и `tw posted --url ...` помечают собственные одобренные тексты.
+2. `tw style-learn` выбирает только безопасные собственные тексты из `ready`, `posted` и локальной таблицы `posts`.
+3. Команда пишет `processed_posts_report.md` и `post_gold_examples.md`.
+4. Новые примеры хранятся отдельно от Telegram в `processed_style_examples`.
+5. В `11_examples_used.md` могут появляться processed post examples как отдельный источник, не смешанный с Telegram.

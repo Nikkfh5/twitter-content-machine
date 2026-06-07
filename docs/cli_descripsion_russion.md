@@ -1,93 +1,40 @@
-# CLI Flex и рабочий план `tw`
+# CLI Description Russian
 
-Дата среза: 2026-06-07.
+Русский справочник по `tw`. Это не полный dump всех флагов, а рабочая схема:
+что писать в терминал каждый день и что происходит под капотом.
 
-Этот файл объясняет, как пользоваться `tw` без постоянной возни с `draft_id`, что делают основные флаги, где лежит память, и что происходит под капотом.
-
-Главное правило: система делает только черновики. Она не публикует в X/Twitter, не вызывает записывающие X API и не имеет команды публикации.
-
-## Самый короткий режим
-
-Обычный ежедневный режим:
+Главная идея: минимум текста в командной строке.
 
 ```powershell
 tw draft "текст мысли"
 ```
 
-По умолчанию это означает:
+По умолчанию это уже включает:
 
-- короткий пост;
-- вызов Codex через командную строку;
+- Codex CLI;
 - модель `gpt-5.5`;
-- усилие рассуждения `xhigh`;
-- скорость `fast`;
-- проверка под рекомендации X включена;
-- личный стиль `tg_crypto_clean` включается сам, если профиль уже построен;
-- новый черновик становится текущим активным черновиком.
+- reasoning `xhigh`;
+- speed `fast`;
+- короткий формат;
+- algorithm-aware review;
+- личный стиль, если стиль уже построен;
+- запись всех артефактов в центральный `~/twitter-system`.
 
-Если Codex CLI не найден или вернул неразбираемый ответ, команда падает с ошибкой. Тихого перехода в ручной режим нет. Запасной локальный режим включается только явно:
+OpenAI API не используется. Автопостинга нет.
 
-```powershell
-tw draft --no-llm "текст мысли"
-```
+---
 
-## Активный черновик
+## 1. Самые частые команды
 
-Чтобы не таскать `draft_id`, система хранит один текущий черновик:
-
-```text
-~/twitter-system/state/current_draft.txt
-```
-
-Там лежит только id активного черновика. Новый `tw draft ...` автоматически делает созданный черновик активным.
-
-Команды без `draft_id` работают по активному черновику:
+### Создать черновик
 
 ```powershell
-tw show
-tw path
-tw edit "сделай короче и менее уверенно"
-tw review
-tw algo
-tw ready
-tw reject
+tw draft "сегодня понял что execution assumptions в бэктесте важнее модели"
 ```
 
-Список черновиков:
+Это основной режим. Обычно больше ничего писать не нужно.
 
-```powershell
-tw drafts
-tw drafts --limit 5
-```
-
-В списке `*` показывает активный черновик. Номер слева можно использовать для переключения:
-
-```powershell
-tw use 2
-tw use latest
-tw use 20260607-...
-```
-
-Старый путь тоже работает:
-
-```powershell
-tw show latest
-tw path latest
-tw review latest
-tw algo-review latest
-```
-
-Но для ручной работы теперь лучше думать так: "я работаю с одним текущим черновиком".
-
-## Что создаёт `tw draft`
-
-Черновики лежат в центральном хранилище:
-
-```text
-~/twitter-system/drafts/YYYY/MM/<draft_id>/
-```
-
-Базовые файлы:
+Что создаётся:
 
 ```text
 00_raw_input.md
@@ -97,29 +44,12 @@ tw algo-review latest
 04_critique.md
 05_selected.md
 06_final_candidate.md
-prompt_to_codex.md
-meta.yaml
-```
-
-Файлы проверки под X:
-
-```text
 07_algorithm_review.md
 08_media_plan.md
 09_distribution_plan.md
-```
-
-Файлы личного стиля, если `tg_crypto_clean` включен:
-
-```text
 10_identity_style_review.md
 11_examples_used.md
 12_risk_flags.md
-```
-
-Файлы контекста и вызова Codex:
-
-```text
 13_context_bundle.md
 13_context_bundle.json
 14_llm_request.md
@@ -127,242 +57,206 @@ meta.yaml
 16_llm_parse_report.md
 AGENTS.override.md
 .codex_home/AGENTS.md
-.codex_home/config.toml
 ```
 
-`15_llm_raw_output.md` появляется, когда модель реально вызывалась.
+Если Codex CLI не найден или сломался, обычный `tw draft "..."` падает с ошибкой.
+Локальный шаблонный fallback включается только явно через `--no-llm`.
 
-## Что происходит под капотом
-
-Когда ты пишешь:
-
-```powershell
-tw draft "мысль"
-```
-
-система делает так:
-
-1. Берёт текст мысли.
-2. Определяет текущий проект по папке запуска.
-3. Обновляет краткий контекст проекта в центральном хранилище.
-4. Убирает секретоподобные строки из входного текста.
-5. Ищет похожую память: идеи, черновики, посты, источники, Telegram.
-6. Создаёт папку черновика.
-7. Пишет базовые варианты и служебные файлы.
-8. Если есть `tg_crypto_clean`, добавляет слой личного стиля.
-9. Собирает `13_context_bundle.md/json`.
-10. Пишет `14_llm_request.md`.
-11. Создаёт `AGENTS.override.md` и отдельный `.codex_home`.
-12. Запускает Codex из папки черновика, а не из папки проекта.
-13. Парсит ответ как JSON.
-14. Обновляет `03_variants.md`, `04_critique.md`, `05_selected.md`, `06_final_candidate.md`.
-15. Записывает отчёт `16_llm_parse_report.md`.
-16. Добавляет алгоритмическую проверку `07-09`.
-17. Делает этот черновик активным.
-
-Почему Codex запускается из папки черновика: чтобы он не подхватил случайный `AGENTS.md` из проекта с кодом. Кодовый `AGENTS.md` можно кратко использовать как контекст, но он не должен становиться активной инструкцией для написания поста.
-
-## Флаги `tw draft`
-
-Формат:
-
-```powershell
-tw draft [флаги] "текст мысли"
-```
-
-Тип черновика:
-
-```text
---short
---thread
---article-note
---build-log
---question
-```
-
-Если ничего не указать, используется `--short`.
-
-Контекст:
-
-```text
---url <ссылка>
-```
-
-Добавляет ссылку как источник.
-
-```text
---context-only
-```
-
-Собирает папку, контекст и запрос для Codex, но не вызывает модель.
-
-```text
---print-prompt-path
-```
-
-Печатает путь к `14_llm_request.md`. Обычно используется вместе с `--context-only`.
-
-Модель:
-
-```text
---llm auto|codex
-```
-
-`auto` сейчас означает Codex CLI. OpenAI API в обычном CLI не используется.
-
-```text
---model <имя>
---reasoning-effort low|medium|high|xhigh
---speed <значение>
-```
-
-Переопределяют модель, усилие и скорость на один запуск.
-
-```text
---no-llm
-```
-
-Не вызывает Codex. Делает локальный запасной черновик.
-
-```text
---require-llm
-```
-
-Явно требует успешного вызова модели. Сейчас обычный режим и так строгий, но флаг оставлен как явное намерение.
-
-Алгоритмическая проверка:
-
-```text
---algo-aware
---no-algo-aware
-```
-
-`--algo-aware` включен по умолчанию. `--no-algo-aware` отключает файлы `07-09` на один запуск.
-
-Личный стиль:
-
-```text
---identity-style <profile>
---identity-style none
---identity-strength <число>
-```
-
-Если `tg_crypto_clean` построен, он включается сам с силой `0.35`. `--identity-style none` отключает личный стиль на один запуск.
-
-## Правка черновика
-
-Главная команда:
-
-```powershell
-tw edit "инструкция"
-```
-
-Примеры:
-
-```powershell
-tw edit "сделай короче"
-tw edit "оставь мысль, но убери уверенность и финансовый тон"
-tw edit "сделай более похоже на build log"
-```
-
-Что происходит:
-
-1. Берётся активный черновик.
-2. В папку черновика пишется `17_edit_request.md`.
-3. Codex вызывается из этой же папки.
-4. Сырой ответ сохраняется в `18_edit_raw_output.md`.
-5. Ответ парсится как JSON с полем `final_candidate`.
-6. Новый текст пишется в `06_final_candidate.md`.
-7. Ревизия сохраняется в `revisions/`.
-8. Отчёт пишется в `19_edit_parse_report.md`.
-
-Можно явно указать черновик:
-
-```powershell
-tw edit --draft-id latest "сделай короче"
-```
-
-Но обычный режим без id теперь предпочтительный.
-
-## Просмотр и статус
-
-Показать финальный текст активного черновика:
+### Посмотреть текущий черновик
 
 ```powershell
 tw show
 ```
 
-Показать путь к папке:
+Показывает финальный кандидат из активного черновика.
+
+### Отредактировать текущий черновик через Codex
 
 ```powershell
-tw path
+tw edit "сделай короче и менее уверенно"
+tw edit "убери GPT-формулировки"
+tw edit "сделай более похожим на build note"
 ```
 
-Открыть папку:
+`tw edit` лучше старого `tw refine --pass ...`, потому что можно писать нормальную инструкцию словами.
+
+### Проверить черновик
 
 ```powershell
-tw open
+tw review
+tw algo
 ```
 
-Пометить готовым:
+`tw review` делает общую проверку текста.
+
+`tw algo` пересобирает сразу три файла:
+
+```text
+07_algorithm_review.md
+08_media_plan.md
+09_distribution_plan.md
+```
+
+Отдельные команды `tw algo-review`, `tw media-plan`, `tw distribution-plan` оставлены как старые/точечные, но обычно не нужны.
+
+### Пометить готовым
 
 ```powershell
 tw ready
 ```
 
-Отклонить:
+Это локальная метка. Она не публикует пост.
 
-```powershell
-tw reject
-```
+`ready` значит: текст достаточно хороший, чтобы считать его твоим одобренным примером.
 
-Локально отметить, что человек сам уже опубликовал пост:
+### Пометить опубликованным вручную
 
 ```powershell
 tw posted --url "https://x.com/..."
 ```
 
-Это не публикация. Это только запись факта в локальную память.
+Это тоже только локальная метка. Команда не пишет в X.
 
-Старые команды тоже работают:
+`posted` значит: ты сам вручную опубликовал пост, а CLI сохранил факт и текст в память.
+
+### Отклонить
 
 ```powershell
-tw mark-ready latest
-tw mark-posted latest --url "https://x.com/..."
+tw reject
 ```
 
-## Проверки черновика
+Отклонённые черновики не должны попадать в личный стиль.
 
-Общая проверка:
+---
+
+## 2. Активный черновик
+
+После `tw draft "..."` новый черновик становится активным.
+
+Поэтому обычно не надо писать `draft_id`.
 
 ```powershell
+tw show
+tw edit "сделай проще"
 tw review
-```
-
-Все X-fit слои сразу:
-
-```powershell
 tw algo
+tw ready
+tw posted --url "https://x.com/..."
 ```
 
-По отдельности:
+Где хранится указатель:
+
+```text
+~/twitter-system/state/current_draft.txt
+```
+
+Это только указатель на текущий черновик, не база знаний.
+
+### Список черновиков
 
 ```powershell
-tw algo-review
-tw media-plan
-tw distribution-plan
+tw drafts
+tw drafts --limit 5
 ```
 
-Личный стиль:
+`*` показывает активный черновик.
+
+### Переключиться на другой черновик
 
 ```powershell
-tw style-review
-tw style-review --profile tg_crypto_clean --identity-strength 0.35
+tw use 2
+tw use latest
 ```
 
-Все эти команды берут активный черновик, если id не указан.
+### Путь к активному черновику
 
-## Поиск в памяти
+```powershell
+tw path
+```
+
+`tw open --print-path` больше не нужен. Используй `tw path`.
+
+---
+
+## 3. Форматы черновика
+
+Обычно формат не указываем:
+
+```powershell
+tw draft "мысль"
+```
+
+Это короткий пост.
+
+Если нужен другой формат:
+
+```powershell
+tw draft --thread "разбор статьи про validation leaks"
+tw draft --build-log "сегодня сломался cache key"
+tw draft --question "как лучше моделировать fills без full LOB?"
+tw draft --article-note --url "https://example.com/article"
+```
+
+`--short` писать не нужно, потому что short уже default.
+
+---
+
+## 4. Личный стиль
+
+В нормальном режиме есть один общий стиль. В командах его имя писать не надо.
+
+Первичная настройка:
+
+```powershell
+tw tg-import "C:\Users\v-353\Downloads\tg_identity_pack.zip"
+tw style-build --auto
+tw style-gold-import "C:\Users\v-353\Downloads\style_content_gold.zip"
+```
+
+Обновить стиль:
+
+```powershell
+tw style-refresh
+tw style-stats
+```
+
+### Учить стиль на своих новых постах
+
+```powershell
+tw style-learn
+```
+
+Команда берёт только твои одобренные тексты:
+
+- `ready`;
+- `posted`;
+- собственные строки из локальной таблицы `posts`.
+
+`ready` и `posted` для этого слоя считаются одним классом: approved own writing.
+
+Команда не берёт:
+
+- rejected drafts;
+- обычные draft-only черновики;
+- peer posts;
+- X-read внешние источники;
+- статьи;
+- Telegram `forwarded_other`;
+- чужие тексты.
+
+Что пишет:
+
+```text
+~/twitter-system/identity_styles/tg_crypto_clean/processed_posts_report.md
+~/twitter-system/identity_styles/tg_crypto_clean/post_gold_examples.md
+~/twitter-system/identity_styles/tg_crypto_clean/style_stats.md
+```
+
+Внутреннее имя профиля всё ещё `tg_crypto_clean`, но руками его обычно не пишем.
+
+---
+
+## 5. Поиск
 
 Обычный поиск:
 
@@ -370,151 +264,38 @@ tw style-review --profile tg_crypto_clean --identity-strength 0.35
 tw search "execution assumptions"
 ```
 
-Флаги:
+Это простой локальный поиск по памяти.
 
-```text
---limit <число>
-```
-
-Обычный поиск сейчас простой: он ищет слова запроса в локальной SQLite-памяти по идеям, черновикам, постам, источникам и Telegram-сообщениям. Это не векторный поиск и не модельная семантика.
-
-Умный поиск через Codex:
+Умный поиск:
 
 ```powershell
 tw search --smart "execution assumptions"
 ```
 
-Что происходит:
+`--smart` берёт найденные локальные кандидаты и просит Codex ранжировать/объяснить их.
+Он ничего не публикует и не создаёт посты.
 
-1. Система сначала делает обычный поиск и собирает кандидатов.
-2. Учитывает текущий проект, чтобы близкие проектные куски были выше.
-3. Пишет кандидатов в:
-
-```text
-~/twitter-system/searches/<search_id>/01_candidates.md
-```
-
-4. Пишет запрос к Codex:
+Логи поиска:
 
 ```text
-02_codex_request.md
+~/twitter-system/searches/
 ```
 
-5. Запускает Codex CLI в отдельной search-папке.
-6. Сохраняет ответ:
+---
 
-```text
-03_codex_raw_output.md
-04_search_report.md
-```
+## 6. Codex-папка для ручной работы с готовыми материалами
 
-7. Печатает объяснение в терминал.
-
-`tw search --smart` не создаёт посты и ничего не публикует. Он только помогает найти нужные черновики, идеи и источники.
-
-## Идеи и память
-
-Сохранить мысль без создания поста:
+Если уже есть файл с разбором статьи, заметками для треда или почти готовым постом:
 
 ```powershell
-tw idea "мысль"
+tw codex --prepare --file "C:\path\article_notes.md" --thread
+tw codex --run
 ```
 
-Где хранится:
-
-```text
-~/twitter-system/inbox/ideas.md
-~/twitter-system/db/content.sqlite
-```
-
-Потом эта идея попадает в поиск и в подбор похожей памяти для новых черновиков.
-
-## `init` и `ensure`
-
-```powershell
-tw init
-tw ensure
-```
-
-Обе команды создают центральное хранилище, если его ещё нет. Они не создают базу в текущем проекте.
-
-По умолчанию:
-
-```text
-~/twitter-system/
-```
-
-База:
-
-```text
-~/twitter-system/db/content.sqlite
-```
-
-Можно переопределить корень:
-
-```powershell
-$env:TWITTER_SYSTEM_ROOT = ".tmp-twitter-system\smoke"
-tw ensure
-```
-
-`ensure` можно запускать сколько угодно раз. Это безопасная идемпотентная команда.
-
-## Личный стиль `tg_crypto_clean`
-
-Импорт:
-
-```powershell
-tw tg-import "C:\Users\v-353\Downloads\tg_identity_pack.zip" --profile tg_crypto_clean
-tw style-build tg_crypto_clean --auto
-```
-
-Автоматический выбор:
-
-- `auto_gold` используется как безопасные примеры стиля;
-- `auto_neutral` слабее, запасной слой;
-- `auto_reject` не используется для стиля;
-- `auto_source_only` может быть темой или источником, но не голосом;
-- `forwarded_other` не становится стилевым примером.
-
-Если профиль построен, обычный `tw draft "..."` подключает его сам. Отключить:
-
-```powershell
-tw draft --identity-style none "мысль"
-```
-
-## Style/content gold
-
-Если есть готовый пакет с сильными примерами стиля и структуры:
-
-```powershell
-tw style-gold-import "C:\Users\v-353\Downloads\style_content_gold.zip"
-```
-
-Команда кладёт в профиль:
-
-```text
-~/twitter-system/profile/style_gold.md
-~/twitter-system/profile/content_gold.md
-~/twitter-system/profile/style_content_gold_report.md
-```
-
-Смысл:
-
-- `style_gold.md` — ритм, прямота, живая формулировка;
-- `content_gold.md` — структура мысли, треда, разбора, аргумента;
-- эти файлы используются в `tw codex` как reference слой;
-- копировать старый crypto/market контент буквально нельзя;
-- переносить надо механику мысли, а не шиллинг, прогнозы или финансовые советы.
-
-## Нативная папка Codex для финальной доводки
-
-Когда уже есть разбор статьи, почти готовый тред или сильный черновик, лучше использовать не `tw draft`, а отдельную Codex-папку:
+Или просто подготовить папку:
 
 ```powershell
 tw codex --prepare
-tw codex --prepare --thread
-tw codex --prepare --file "C:\path\article_notes.md" --thread
-tw codex --run
 ```
 
 Что создаётся:
@@ -532,122 +313,145 @@ tw codex --run
   .codex_home/config.toml
 ```
 
-Это решает конфликт двух `AGENTS.md`:
+Это отдельная content-only папка. Её `AGENTS.md` не равен repo `AGENTS.md`.
+
+Используй этот режим, когда хочешь вручную работать с Codex в нормальной папке,
+но с правильными инструкциями для постов, стиля и безопасности.
+
+---
+
+## 7. Где всё хранится
+
+Центральный workspace:
 
 ```text
-C:\N\hse\twitter-content-machine\AGENTS.md
-  = инструкции для разработки кода
-
-~/twitter-system/codex_sessions/<session_id>/AGENTS.md
-  = инструкции для финальной доводки текста
+~/twitter-system/
 ```
 
-`tw codex --prepare` только готовит папку и печатает путь.
-
-`tw codex --run` запускает Codex из этой папки с изолированным `CODEX_HOME`.
-
-Режим треда:
-
-```powershell
-tw codex --prepare --thread
-```
-
-Режим одиночного финального поста:
-
-```powershell
-tw codex --prepare --final-post
-```
-
-Готовый файл с заметками:
-
-```powershell
-tw codex --prepare --file "C:\path\article_notes.md" --thread
-```
-
-Конкретный черновик:
-
-```powershell
-tw codex latest --prepare
-tw codex 20260607-... --prepare
-```
-
-Последняя Codex-session папка хранится тут:
+Главные папки:
 
 ```text
-~/twitter-system/state/current_codex_session.txt
+drafts/           # черновики
+identity_styles/  # личный стиль
+profile/          # persona/style/gold files
+projects/         # контекст проектов
+searches/         # логи smart search
+sources/          # статьи, X-read, Telegram
+db/content.sqlite # база данных
+state/            # current draft/session pointers
 ```
 
-Codex внутри этой папки должен писать результат только в:
+`tw` не должен писать в текущий проект по умолчанию. Он собирает контекст проекта
+и сохраняет его централизованно в `~/twitter-system/projects/<project_id>/`.
 
-```text
-output/
-```
+---
 
-## X read-only
+## 8. X/Twitter
 
-Синхронизация своих уже опубликованных постов:
+В MVP нет автопостинга.
+
+Разрешены только read-only/import/status операции:
 
 ```powershell
 tw sync-posted
-```
-
-Анализ своих:
-
-```powershell
 tw analyze-own --sync
-```
-
-Чтение чужого аккаунта как источника:
-
-```powershell
 tw x-read @handle --limit 100
 tw analyze-peer @handle --limit 100
 ```
 
-Это только чтение. Чужие посты не становятся твоим стилем.
+`tw posted --url ...` не публикует. Это локальная отметка после того, как ты сам
+руками опубликовал пост.
 
-## Короткая ежедневная схема
+---
 
-Минимум:
+## 9. Отладочные и legacy-команды
+
+Эти команды/флаги остаются в коде, но не должны быть ежедневным режимом.
+
+### LLM debug
 
 ```powershell
-tw draft "мысль"
+tw draft --llm codex --model gpt-5.5 --reasoning-effort xhigh --speed fast "мысль"
+tw draft --context-only --print-prompt-path "мысль"
+tw draft --no-llm "мысль"
+```
+
+Зачем:
+
+- проверить context bundle;
+- проверить prompt;
+- создать локальный fallback без Codex;
+- debug, если Codex CLI сломался.
+
+Обычно это не нужно.
+
+### Отключить algorithm-aware
+
+```powershell
+tw draft --no-algo-aware "мысль"
+```
+
+Обычно не нужно, потому что algorithm-aware review включён по умолчанию.
+
+### Старые команды-синонимы
+
+```powershell
+tw queue
+tw mark-ready
+tw mark-posted --url "https://x.com/..."
+tw open --print-path
+tw refine --pass human
+tw algo-review
+tw media-plan
+tw distribution-plan
+```
+
+Предпочтительные замены:
+
+```text
+tw queue                         -> tw drafts
+tw mark-ready                    -> tw ready
+tw mark-posted --url ...         -> tw posted --url ...
+tw open --print-path             -> tw path
+tw refine --pass ...             -> tw edit "инструкция словами"
+tw algo-review/media/distribution -> tw algo
+```
+
+---
+
+## 10. Нормальный рабочий цикл
+
+```powershell
+tw draft "сырая мысль"
 tw show
-tw edit "сделай короче"
+tw edit "сделай короче и живее"
+tw review
+tw algo
 tw ready
 ```
 
-Если надо найти старое:
+Если потом вручную запостил:
 
 ```powershell
-tw search --smart "примерная тема"
-tw drafts
-tw use 2
-tw show
+tw posted --url "https://x.com/..."
+tw style-learn
 ```
 
-Если надо понять, что подал в модель:
+Если не понравилось:
 
 ```powershell
-tw path
+tw reject
 ```
 
-Потом открыть папку и смотреть:
+---
 
-```text
-13_context_bundle.md
-14_llm_request.md
-15_llm_raw_output.md
-16_llm_parse_report.md
-```
+## 11. Что важно помнить
 
-## Что пока не сделано
-
-Слабые места текущей версии:
-
-- обычный поиск не векторный, а простой текстовый;
-- `tw search --smart` ранжирует уже найденные кандидаты, но сам не делает полноценный семантический поиск по всей базе;
-- ручное открытие папки всё ещё полезно для глубокого разбора;
-- `tw edit` ожидает JSON от Codex, поэтому при кривом ответе команда упадёт и сохранит отчёт.
-
-Следующее сильное улучшение: добавить векторную память или локальный semantic index, чтобы `tw search --smart` находил похожие идеи даже без совпадающих слов.
+- `tw draft "..."` уже делает почти всё.
+- `draft_id` обычно не нужен.
+- `--short` обычно не нужен.
+- `--algo-aware` обычно не нужен.
+- `--llm`, `--model`, `--reasoning-effort`, `--speed` обычно не нужны.
+- `ready` и `posted` оба считаются одобренным собственным письмом для `style-learn`.
+- `style-learn` не учится на чужих постах и rejected/draft-only текстах.
+- Автопостинга нет.

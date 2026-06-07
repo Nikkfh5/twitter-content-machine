@@ -27,17 +27,16 @@ $env:TWITTER_SYSTEM_ROOT = ".tmp-twitter-system\smoke"
 
 ```bash
 tw idea "read an article about risk regimes; seems useful for thinking about backtests"
-tw draft --short "today I realized my backtest execution model is fake"
+tw draft "today I realized my backtest execution model is fake"
 tw draft --thread --url "https://example.com/article"
 tw draft --build-log "cache key ignored branch and polluted results"
 tw draft "today I misunderstood fills"
-tw draft --no-llm --short "today I realized my backtest execution model is fake"
-tw draft --context-only --print-prompt-path --short "raw idea"
 tw show
 tw edit "make it shorter"
 tw review
 tw algo
 tw ready
+tw style-learn
 tw drafts
 tw use 2
 tw path
@@ -52,6 +51,10 @@ tw analyze-own --sync
 `tw draft "..."` makes the new draft active. Most draft commands can omit
 `draft_id` and operate on that active draft. `tw path` prints the active draft
 folder without opening a GUI.
+
+Debug-only draft flags such as `--llm`, `--model`, `--reasoning-effort`,
+`--speed`, `--context-only`, and `--no-llm` still exist, but they are not part
+of the daily workflow.
 
 Russian CLI guide:
 
@@ -249,9 +252,9 @@ Modes:
 
 ```powershell
 tw draft "raw idea"
-tw draft --no-llm --short "raw idea"
-tw draft --llm codex --model gpt-5.5 --reasoning-effort xhigh --speed fast --short "raw idea"
-tw draft --context-only --print-prompt-path --short "raw idea"
+tw draft --no-llm "raw idea"
+tw draft --llm codex --model gpt-5.5 --reasoning-effort xhigh --speed fast "raw idea"
+tw draft --context-only --print-prompt-path "raw idea"
 ```
 
 Critical behavior:
@@ -279,15 +282,12 @@ Run after creating a draft:
 
 ```bash
 tw algo
-tw algo-review
-tw media-plan
-tw distribution-plan
 ```
 
 Or generate all review artifacts at draft time:
 
 ```bash
-tw draft --short "small build note from today's backtest"
+tw draft "small build note from today's backtest"
 ```
 
 The decision label `publish candidate` means "safe enough for a human to
@@ -299,11 +299,12 @@ Import the prepared Telegram identity/style package or a raw Telegram Desktop
 `result.json`:
 
 ```powershell
-tw tg-import "C:\Users\v-353\Downloads\tg_identity_pack.zip" --profile tg_crypto_clean
-tw style-build tg_crypto_clean --auto
-tw style-refresh tg_crypto_clean
-tw style-stats tg_crypto_clean
-tw style-curate tg_crypto_clean
+tw tg-import "C:\Users\v-353\Downloads\tg_identity_pack.zip"
+tw style-build --auto
+tw style-refresh
+tw style-stats
+tw style-learn
+tw style-curate
 ```
 
 Known local inputs from the current setup:
@@ -317,8 +318,8 @@ C:\Users\v-353\Downloads\AyuGram Desktop\ChatExport_2026-06-07\result.json
 Use it while drafting:
 
 ```bash
-tw draft --short "raw idea"
-tw style-review --profile tg_crypto_clean
+tw draft "raw idea"
+tw style-review
 ```
 
 Rules:
@@ -328,6 +329,9 @@ Rules:
 - curated `private` and `reject` examples must never be used for generation
 - identity strength above `0.6` is risky and should be manually reviewed
 - `style-build --auto` is the default fast path; manual `style-curate` is optional
+- `style-learn` updates the default style from approved own writing only:
+  `ready`, `posted`, and local own posts. Rejected drafts, draft-only text,
+  peer posts, external sources, and X-read material are excluded.
 
 ## Project Context
 
@@ -503,11 +507,11 @@ $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'; python -m pytest -q
 ```powershell
 $env:TWITTER_SYSTEM_ROOT = ".tmp-twitter-system\identity-smoke"
 python -m twitter_content_machine ensure
-python -m twitter_content_machine tg-import "C:\Users\v-353\Downloads\tg_identity_pack.zip" --profile tg_crypto_clean
-python -m twitter_content_machine style-build tg_crypto_clean --auto
-python -m twitter_content_machine draft --no-llm --short "I realized my backtest execution assumptions are fake"
-python -m twitter_content_machine style-review --profile tg_crypto_clean
-python -m twitter_content_machine queue --limit 1
+python -m twitter_content_machine tg-import "C:\Users\v-353\Downloads\tg_identity_pack.zip"
+python -m twitter_content_machine style-build --auto
+python -m twitter_content_machine draft --no-llm "I realized my backtest execution assumptions are fake"
+python -m twitter_content_machine style-review
+python -m twitter_content_machine drafts --limit 1
 ```
 
 Expected: no posting, dated draft folder, `07_*` through `16_*` review/context files,
