@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .db import connect_db, resolve_draft_id, search_memory, upsert_fts
+from .identity_style import identity_brief_context, write_identity_artifacts
 from .models import DraftResult
 from .project_context import detect_project, refresh_project_context
 from .review import anti_gpt_pass, critique_text, redact_secrets, score_text
@@ -72,7 +73,13 @@ def _variant_thread(text: str) -> str:
     )
 
 
-def generate_variants(text: str, draft_type: str) -> tuple[str, str, str]:
+def generate_variants(text: str, draft_type: str, identity_style_active: bool = False) -> tuple[str, str, str]:
+    if identity_style_active:
+        return (
+            f"Clean current-account version:\n\nSmall note from building: {text}.\n\nCurrent guess: the useful part is not the take itself, but which assumption broke.",
+            f"Raw/personal version:\n\nI used to think this was simpler: {text}.\n\nNow it feels more annoying. The system breaks around assumptions, not around the pretty metric.",
+            f"Compressed X-native version:\n\n{text}.\n\nThe annoying part is that the wrong assumption can look like insight until you test it.",
+        )
     if draft_type == "thread":
         a = _variant_thread(text)
         b = _variant_thread(text).replace("Small build note", "Backtest note")
@@ -104,7 +111,7 @@ def generate_variants(text: str, draft_type: str) -> tuple[str, str, str]:
     )
 
 
-def _prompt(text: str, draft_type: str, brief: str, profile: dict[str, str]) -> str:
+def _prompt(text: str, draft_type: str, brief: str, profile: dict[str, str], identity_context: str = "") -> str:
     return f"""# Prompt To Codex
 
 You are helping draft X/Twitter content. Draft only. Never publish or call any write/post API.
@@ -126,6 +133,9 @@ Forbidden phrases:
 Safety:
 {profile.get('safety', '')}
 
+Identity/style context:
+{identity_context}
+
 Brief and context:
 {brief}
 
@@ -145,6 +155,8 @@ def create_draft(
     cwd: Path | str | None = None,
     url: str | None = None,
     copy: bool = False,
+    identity_style_profile: str | None = None,
+    identity_strength: float = 0.0,
 ) -> DraftResult:
     workspace = ensure_workspace()
     sync_posted()
@@ -157,8 +169,13 @@ def create_draft(
     folder = workspace.root / "drafts" / f"{now:%Y}" / f"{now:%m}" / draft_id
     folder.mkdir(parents=True, exist_ok=False)
     profile = read_profile(workspace.root)
-    brief = _brief(safe_text, draft_type, context.summary, memory)
-    a, b, c = generate_variants(safe_text, draft_type)
+    identity_context = (
+        identity_brief_context(identity_style_profile, identity_strength)
+        if identity_style_profile
+        else ""
+    )
+    brief = _brief(safe_text, draft_type, context.summary + "\n\n" + identity_context, memory)
+    a, b, c = generate_variants(safe_text, draft_type, identity_style_active=bool(identity_style_profile))
     variants = f"""# Variants
 
 ## Variant A: direct / raw
@@ -198,7 +215,7 @@ def create_draft(
         "04_critique.md": critique,
         "05_selected.md": f"# Selected\n\n{selected}\n",
         "06_final_candidate.md": f"{final}\n",
-        "prompt_to_codex.md": _prompt(safe_text, draft_type, brief, profile),
+        "prompt_to_codex.md": _prompt(safe_text, draft_type, brief, profile, identity_context),
         "meta.yaml": f"""id: {draft_id}
 created_at: {iso_now()}
 updated_at: {iso_now()}
@@ -208,6 +225,8 @@ status: draft
 source_url: {url or ''}
 folder_path: {folder}
 autopublish: false
+identity_style: {identity_style_profile or ''}
+identity_strength: {identity_strength if identity_style_profile else ''}
 """,
     }
     for name in DRAFT_FILES:
@@ -242,6 +261,8 @@ autopublish: false
             pyperclip.copy(final)
         except Exception:
             pass
+    if identity_style_profile:
+        write_identity_artifacts(draft_id, identity_style_profile, identity_strength)
     return DraftResult(draft_id, folder, final)
 
 

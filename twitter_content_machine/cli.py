@@ -6,12 +6,15 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .algorithm_review import artifact_paths, write_algorithm_review, write_all_algorithm_layers, write_distribution_plan, write_media_plan
 from .article import store_article
 from .config import load_config
 from .db import connect_db, resolve_draft_id, search_memory, upsert_fts
 from .drafting import create_draft, refine_draft, review_draft, set_draft_status
+from .identity_style import style_build, style_curate, style_review
 from .llm import codex_available, mode_description
 from .project_context import detect_project, refresh_project_context
+from .telegram_import import import_telegram
 from .utils import iso_now, short_hash
 from .workspace import ensure_workspace
 from .x_read import sync_posted
@@ -102,9 +105,21 @@ def _cmd_draft(args: argparse.Namespace, cwd: Path | None) -> int:
     if not text:
         print("draft text required")
         return 1
-    draft = create_draft(text, _draft_type_from_args(args), cwd, args.url, args.copy)
+    draft = create_draft(
+        text,
+        _draft_type_from_args(args),
+        cwd,
+        args.url,
+        args.copy,
+        args.identity_style,
+        args.identity_strength if args.identity_style else 0.0,
+    )
+    algo_paths = write_all_algorithm_layers(draft.id) if args.algo_aware else None
     print(f"draft: {draft.id}")
     print(f"path: {draft.folder}")
+    if algo_paths:
+        print("algorithm-aware review:")
+        print(artifact_paths(algo_paths))
     print("")
     print(draft.final_text)
     return 0
@@ -142,6 +157,46 @@ def _cmd_refine(args: argparse.Namespace) -> int:
 
 def _cmd_review(args: argparse.Namespace) -> int:
     print(review_draft(args.draft_id))
+    return 0
+
+
+def _cmd_algo_review(args: argparse.Namespace) -> int:
+    print(write_algorithm_review(args.draft_id))
+    return 0
+
+
+def _cmd_media_plan(args: argparse.Namespace) -> int:
+    print(write_media_plan(args.draft_id))
+    return 0
+
+
+def _cmd_distribution_plan(args: argparse.Namespace) -> int:
+    print(write_distribution_plan(args.draft_id))
+    return 0
+
+
+def _cmd_tg_import(args: argparse.Namespace) -> int:
+    result = import_telegram(args.path, args.profile, args.own_name)
+    print(f"profile: {result.profile_name}")
+    print(f"path: {result.profile_dir}")
+    print(f"imported: {result.imported}")
+    print(f"own_original: {result.own_original}")
+    print(f"forwarded_other: {result.forwarded_other}")
+    return 0
+
+
+def _cmd_style_build(args: argparse.Namespace) -> int:
+    print(style_build(args.profile))
+    return 0
+
+
+def _cmd_style_curate(args: argparse.Namespace) -> int:
+    print(style_curate(args.profile, args.limit))
+    return 0
+
+
+def _cmd_style_review(args: argparse.Namespace) -> int:
+    print(style_review(args.draft_id, args.profile, args.identity_strength))
     return 0
 
 
@@ -203,6 +258,11 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     print(f"codex CLI: {'available' if codex_available() else 'not detected'}")
     print(f"x provider: {config.x_provider}")
     print(f"x readonly: {config.x_readonly}")
+    with connect_db() as conn:
+        profile_count = conn.execute("select count(*) from identity_style_profiles").fetchone()[0]
+        tg_count = conn.execute("select count(*) from telegram_messages").fetchone()[0]
+    print(f"identity profiles: {profile_count}")
+    print(f"telegram messages: {tg_count}")
     if config.x_provider == "none":
         print("warning: read-only X sync disabled; tw sync-posted will exit cleanly")
     print("safety: draft-only; no publish command is exposed")
@@ -250,6 +310,9 @@ def build_parser() -> argparse.ArgumentParser:
     kind.add_argument("--question", action="store_true")
     draft.add_argument("--url")
     draft.add_argument("--copy", action="store_true")
+    draft.add_argument("--algo-aware", action="store_true")
+    draft.add_argument("--identity-style")
+    draft.add_argument("--identity-strength", type=float, default=0.35)
     draft.add_argument("text", nargs="*")
     draft.set_defaults(func=_cmd_draft)
 
@@ -265,12 +328,45 @@ def build_parser() -> argparse.ArgumentParser:
 
     refine = sub.add_parser("refine")
     refine.add_argument("draft_id")
-    refine.add_argument("--pass", dest="pass_name", choices=["critique", "compress", "human", "thread", "shorten", "clarify"])
+    refine.add_argument("--pass", dest="pass_name", choices=["critique", "compress", "human", "thread", "shorten", "clarify", "identity"])
     refine.set_defaults(func=_cmd_refine)
 
     review = sub.add_parser("review")
     review.add_argument("draft_id")
     review.set_defaults(func=_cmd_review)
+
+    algo_review = sub.add_parser("algo-review")
+    algo_review.add_argument("draft_id")
+    algo_review.set_defaults(func=_cmd_algo_review)
+
+    media_plan = sub.add_parser("media-plan")
+    media_plan.add_argument("draft_id")
+    media_plan.set_defaults(func=_cmd_media_plan)
+
+    distribution_plan = sub.add_parser("distribution-plan")
+    distribution_plan.add_argument("draft_id")
+    distribution_plan.set_defaults(func=_cmd_distribution_plan)
+
+    tg_import = sub.add_parser("tg-import")
+    tg_import.add_argument("path")
+    tg_import.add_argument("--profile", default="tg_crypto_clean")
+    tg_import.add_argument("--own-name", default="Nik Nik")
+    tg_import.set_defaults(func=_cmd_tg_import)
+
+    style_build_cmd = sub.add_parser("style-build")
+    style_build_cmd.add_argument("profile")
+    style_build_cmd.set_defaults(func=_cmd_style_build)
+
+    style_curate_cmd = sub.add_parser("style-curate")
+    style_curate_cmd.add_argument("profile")
+    style_curate_cmd.add_argument("--limit", type=int, default=50)
+    style_curate_cmd.set_defaults(func=_cmd_style_curate)
+
+    style_review_cmd = sub.add_parser("style-review")
+    style_review_cmd.add_argument("draft_id")
+    style_review_cmd.add_argument("--profile", default="tg_crypto_clean")
+    style_review_cmd.add_argument("--identity-strength", type=float, default=0.35)
+    style_review_cmd.set_defaults(func=_cmd_style_review)
 
     queue = sub.add_parser("queue")
     queue.add_argument("--status")

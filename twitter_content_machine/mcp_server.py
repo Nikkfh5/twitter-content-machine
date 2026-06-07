@@ -3,9 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+from .algorithm_review import write_algorithm_review, write_all_algorithm_layers
 from .db import search_memory
 from .drafting import create_draft, get_draft, refine_draft, review_draft, set_draft_status
+from .identity_style import style_build, style_curate, style_review, write_identity_artifacts
 from .project_context import detect_project, refresh_project_context
+from .telegram_import import import_telegram
 from .x_read import sync_posted
 
 
@@ -33,8 +36,26 @@ def tw_save_idea(text: str, url: str | None = None, tags: str | None = None, cwd
     return {"idea_id": idea_id}
 
 
-def tw_create_draft(text: str, type: str = "short", url: str | None = None, cwd: str | None = None) -> dict[str, str]:
-    draft = create_draft(text, type, Path(cwd) if cwd else None, url)
+def tw_create_draft(
+    text: str,
+    type: str = "short",
+    identity_style: str | None = None,
+    identity_strength: float = 0.35,
+    algo_aware: bool = False,
+    url: str | None = None,
+    cwd: str | None = None,
+) -> dict[str, str]:
+    draft = create_draft(
+        text,
+        type,
+        Path(cwd) if cwd else None,
+        url,
+        False,
+        identity_style,
+        identity_strength if identity_style else 0.0,
+    )
+    if algo_aware:
+        write_all_algorithm_layers(draft.id)
     return {"draft_id": draft.id, "folder": str(draft.folder), "final_text": draft.final_text}
 
 
@@ -55,6 +76,37 @@ def tw_refine_draft(draft_id: str, instruction: str) -> dict[str, str]:
 
 def tw_review_draft(draft_id: str) -> str:
     return review_draft(draft_id)
+
+
+def tw_algo_review(draft_id: str) -> dict[str, str]:
+    path = write_algorithm_review(draft_id)
+    return {"path": str(path)}
+
+
+def tw_style_review(draft_id: str, profile_name: str = "tg_crypto_clean") -> dict[str, str]:
+    path = style_review(draft_id, profile_name)
+    return {"path": str(path)}
+
+
+def tw_import_telegram(path: str, profile_name: str = "tg_crypto_clean") -> dict[str, str | int]:
+    result = import_telegram(path, profile_name)
+    return {
+        "profile_name": result.profile_name,
+        "profile_dir": str(result.profile_dir),
+        "imported": result.imported,
+        "own_original": result.own_original,
+        "forwarded_other": result.forwarded_other,
+    }
+
+
+def tw_style_build(profile_name: str) -> dict[str, str]:
+    path = style_build(profile_name)
+    return {"profile_dir": str(path)}
+
+
+def tw_style_curate(profile_name: str) -> dict[str, str]:
+    path = style_curate(profile_name)
+    return {"path": str(path)}
 
 
 def tw_mark_ready(draft_id: str) -> dict[str, str]:
@@ -82,6 +134,11 @@ TOOLS: dict[str, Callable[..., Any]] = {
     "tw_list_drafts": tw_list_drafts,
     "tw_refine_draft": tw_refine_draft,
     "tw_review_draft": tw_review_draft,
+    "tw_algo_review": tw_algo_review,
+    "tw_style_review": tw_style_review,
+    "tw_import_telegram": tw_import_telegram,
+    "tw_style_build": tw_style_build,
+    "tw_style_curate": tw_style_curate,
     "tw_mark_ready": tw_mark_ready,
     "tw_mark_posted": tw_mark_posted,
     "tw_sync_posted_readonly": tw_sync_posted_readonly,

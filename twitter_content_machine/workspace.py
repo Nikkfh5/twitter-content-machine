@@ -71,10 +71,55 @@ Core themes:
 - overstate achievements
 - imply official company position
 """,
+    "x_algorithm_principles.md": """# X Algorithm Principles
+
+Optimize for personalized recommendation fit, not generic virality.
+
+A draft should pass four checks:
+
+1. Candidate retrieval fit
+   - clear audience cluster
+   - connected to markets / systems / ML infra / build logs
+   - consistent with previous account direction
+
+2. Positive action prediction
+   - choose 1-2 likely actions: reply, repost/share, dwell, photo_expand,
+     profile_click, follow_author, click
+
+3. Negative action risk
+   - avoid not_interested, block_author, mute_author, report
+   - avoid spammy crypto/finance wording, overclaiming, repeated ideas,
+     generic motivational content, and engagement bait
+
+4. Format fit
+   - short post for one idea
+   - thread only when each part adds independent value
+   - media only when it increases understanding
+   - question only when bounded and non-bait
+""",
+    "x_fit_rubric.yaml": """x_fit_rubric:
+  candidate_retrieval_fit:
+    description: "Clear topic/audience cluster; likely similar to viewers' engagement history"
+  concrete_value:
+    description: "Specific observation, example, failure, metric, or useful framing"
+  positive_action_potential:
+    description: "Likely to trigger reply/repost/dwell/profile_click/follow/photo_expand"
+  negative_feedback_safety:
+    description: "Low risk of not_interested/mute/block/report"
+  style_authenticity:
+    description: "Sounds like Nikita's public notebook, not GPT/LinkedIn/influencer"
+  media_fit:
+    description: "Media increases understanding or engagement"
+decision_rule:
+  publish_candidate: "total >= 22 and no high safety risk"
+  revise: "total 16-21 or fixable medium risk"
+  reject: "total < 16 or high safety risk"
+""",
 }
 
 WORKSPACE_DIRS = [
     "profile",
+    "identity_styles",
     "inbox/raw",
     "drafts",
     "ready",
@@ -83,6 +128,7 @@ WORKSPACE_DIRS = [
     "projects",
     "sources/articles",
     "sources/x_posts",
+    "sources/telegram",
     "sources/notes",
     "db",
     "logs",

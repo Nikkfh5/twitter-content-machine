@@ -84,10 +84,51 @@ SCHEMA = [
       tags text
     )
     """,
+    """
+    create table if not exists telegram_messages(
+      id text primary key,
+      profile_name text,
+      telegram_message_id text,
+      date text,
+      source_role text,
+      forwarded_from text,
+      author text,
+      text_clean text,
+      text_raw_hash text,
+      length integer,
+      reactions integer,
+      has_photo integer,
+      media_type text,
+      risk_flags text,
+      labels text,
+      imported_at text
+    )
+    """,
+    """
+    create table if not exists identity_style_profiles(
+      profile_name text primary key,
+      created_at text,
+      updated_at text,
+      summary text,
+      default_strength real,
+      status text
+    )
+    """,
+    """
+    create table if not exists identity_style_examples(
+      id text primary key,
+      profile_name text,
+      telegram_message_id text,
+      label text,
+      note text,
+      created_at text
+    )
+    """,
     "create virtual table if not exists ideas_fts using fts5(id, raw_text, tags)",
     "create virtual table if not exists drafts_fts using fts5(id, title, final_text, tags)",
     "create virtual table if not exists posts_fts using fts5(id, text, tags)",
     "create virtual table if not exists sources_fts using fts5(id, title, summary, raw_text, tags)",
+    "create virtual table if not exists telegram_messages_fts using fts5(id, profile_name, text_clean, labels)",
 ]
 
 
@@ -133,6 +174,7 @@ def search_memory(query: str, limit: int = 10) -> list[dict[str, str]]:
             ("draft", "drafts_fts", "final_text"),
             ("post", "posts_fts", "text"),
             ("source", "sources_fts", "summary"),
+            ("telegram", "telegram_messages_fts", "text_clean"),
         ]
         for kind, table, column in searches:
             try:
