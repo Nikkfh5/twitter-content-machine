@@ -1036,6 +1036,25 @@ def test_algo_review_rejects_crypto_financial_advice_language(
     assert "decision: reject" in review
 
 
+def test_algo_review_does_not_match_crypto_terms_inside_normal_words(
+    tw_root: Path, tmp_path: Path
+) -> None:
+    project = tmp_path / "false-crypto-risk"
+    project.mkdir()
+    ensure_workspace()
+    draft = create_draft(
+        "The process forced the project into a more serious shape with reproducible comparisons and repeated benchmark checks.",
+        "adaptive",
+        project,
+        no_llm=True,
+    )
+
+    assert run_cli(["algo-review", draft.id], cwd=project) == 0
+    review = (draft.folder / "07_algorithm_review.md").read_text(encoding="utf-8").lower()
+
+    assert "crypto-shill risk: low" in review
+
+
 def test_media_plan_rejects_decorative_media(tw_root: Path, tmp_path: Path) -> None:
     project = tmp_path / "media"
     project.mkdir()

@@ -179,7 +179,14 @@ def _tokens(text: str) -> set[str]:
 
 def _contains_any(text: str, terms: list[str]) -> bool:
     lowered = text.lower()
-    return any(term in lowered for term in terms)
+    for term in terms:
+        normalized = term.lower().strip()
+        if not normalized:
+            continue
+        pattern = r"(?<![a-z0-9+#])" + re.escape(normalized) + r"(?![a-z0-9+#])"
+        if re.search(pattern, lowered):
+            return True
+    return False
 
 
 def _draft_view(draft_id: str) -> DraftView:
