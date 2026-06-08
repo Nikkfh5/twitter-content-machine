@@ -26,13 +26,14 @@ Generate structured output only according to the requested schema.
 
 def prepare_generation_workspace(draft_folder: Path, config: Config) -> None:
     (draft_folder / "AGENTS.override.md").write_text(AGENTS_OVERRIDE, encoding="utf-8")
+    (draft_folder / "AGENTS.md").write_text(AGENTS_OVERRIDE, encoding="utf-8")
     codex_home = draft_folder / ".codex_home"
     codex_home.mkdir(exist_ok=True)
     (codex_home / "AGENTS.md").write_text(AGENTS_OVERRIDE, encoding="utf-8")
     (codex_home / "config.toml").write_text(
         f"""model = "{config.llm_model}"
-reasoning_effort = "{config.llm_reasoning_effort}"
-speed = "{config.llm_speed}"
+model_reasoning_effort = "{config.llm_reasoning_effort}"
+service_tier = "{config.llm_speed}"
 """,
         encoding="utf-8",
     )

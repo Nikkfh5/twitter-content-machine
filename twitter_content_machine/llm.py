@@ -11,7 +11,27 @@ from .llm_parsing import ParsedLLMOutput, parse_llm_output
 
 
 def resolve_codex_command(command: str = "codex") -> str | None:
-    return shutil.which(command)
+    resolved = shutil.which(command)
+    if not resolved:
+        return None
+    path = Path(resolved)
+    if path.suffix.lower() in {".cmd", ".bat"}:
+        native = (
+            path.parent
+            / "node_modules"
+            / "@openai"
+            / "codex"
+            / "node_modules"
+            / "@openai"
+            / "codex-win32-x64"
+            / "vendor"
+            / "x86_64-pc-windows-msvc"
+            / "bin"
+            / "codex.exe"
+        )
+        if native.exists():
+            return str(native)
+    return resolved
 
 
 def codex_available(command: str = "codex") -> bool:
@@ -31,6 +51,7 @@ class CodexCapabilities:
     supports_cd: bool
     supports_model: bool
     supports_config: bool
+    supports_skip_git_repo_check: bool
 
 
 @dataclass(frozen=True)
@@ -71,23 +92,42 @@ def detect_codex_capabilities(command: str = "codex") -> CodexCapabilities:
         supports_cd="--cd" in exec_help or "--cwd" in exec_help,
         supports_model="--model" in exec_help or " -m" in exec_help,
         supports_config="--config" in combined or " -c" in combined,
+        supports_skip_git_repo_check="--skip-git-repo-check" in exec_help,
     )
+
+
+def _capability(capabilities: CodexCapabilities | dict, canonical: str, legacy: str) -> bool:
+    if isinstance(capabilities, dict):
+        return bool(capabilities.get(canonical, capabilities.get(legacy, False)))
+    return bool(getattr(capabilities, canonical))
+
+
+def _isolated_codex_home_has_auth(codex_home: Path) -> bool:
+    return (codex_home / "auth.json").exists() or (codex_home / "codex-auth.json").exists()
 
 
 def build_codex_invocation_plan(request_text: str, draft_folder: Path, config: Config) -> CodexInvocationPlan:
     capabilities = detect_codex_capabilities(config.llm_codex_command)
     resolved = resolve_codex_command(config.llm_codex_command) or config.llm_codex_command
     env = os.environ.copy()
-    if config.llm_codex_isolate_home:
-        env["CODEX_HOME"] = str(draft_folder / ".codex_home")
+    isolated_home = draft_folder / ".codex_home"
+    if config.llm_codex_isolate_home and _isolated_codex_home_has_auth(isolated_home):
+        env["CODEX_HOME"] = str(isolated_home)
     command = [resolved, "exec"]
-    supports_cd = capabilities.get("cd", capabilities.get("supports_cd", False)) if isinstance(capabilities, dict) else capabilities.supports_cd
-    supports_model = capabilities.get("model", capabilities.get("supports_model", False)) if isinstance(capabilities, dict) else capabilities.supports_model
+    supports_cd = _capability(capabilities, "supports_cd", "cd")
+    supports_model = _capability(capabilities, "supports_model", "model")
+    supports_skip_git_repo_check = _capability(capabilities, "supports_skip_git_repo_check", "skip_git_repo_check")
     if supports_cd:
         command.extend(["--cd", str(draft_folder)])
+    if supports_skip_git_repo_check:
+        command.append("--skip-git-repo-check")
     if supports_model:
         command.extend(["--model", config.llm_model])
-    command.append(request_text)
+    if _capability(capabilities, "supports_config", "config"):
+        command.extend(["--config", f'model_reasoning_effort="{config.llm_reasoning_effort}"'])
+        if config.llm_speed:
+            command.extend(["--config", f'service_tier="{config.llm_speed}"'])
+    command.append("-")
     return CodexInvocationPlan(command=command, cwd=draft_folder, env=env, capabilities=capabilities)
 
 
@@ -125,7 +165,8 @@ def _run_codex(request_path: Path, draft_folder: Path, config: Config, require_l
         return LLMRunResult(True, False, "", parsed, message)
     request_text = request_path.read_text(encoding="utf-8", errors="replace")
     plan = build_codex_invocation_plan(request_text, draft_folder, config)
-    if not plan.capabilities.exec_available:
+    exec_available = _capability(plan.capabilities, "exec_available", "exec")
+    if not exec_available:
         parsed = parse_llm_output("")
         message = f"{config.llm_codex_command} exec is not available"
         if require_llm:
@@ -136,7 +177,10 @@ def _run_codex(request_path: Path, draft_folder: Path, config: Config, require_l
             plan.command,
             cwd=plan.cwd,
             env=plan.env,
+            input=request_text,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             capture_output=True,
             timeout=config.llm_codex_timeout_seconds,
             check=False,
@@ -147,6 +191,15 @@ def _run_codex(request_path: Path, draft_folder: Path, config: Config, require_l
             raise RuntimeError(str(exc)) from exc
         return LLMRunResult(True, False, "", parsed, str(exc))
     raw = completed.stdout + ("\n\nSTDERR:\n" + completed.stderr if completed.stderr else "")
+    if completed.returncode != 0:
+        stderr = " ".join(completed.stderr.split()) if completed.stderr else ""
+        message = f"codex exited with code {completed.returncode}"
+        if stderr:
+            message += f": {stderr[:500]}"
+        parsed = ParsedLLMOutput(False, {}, f"Codex exited with code {completed.returncode}")
+        if require_llm:
+            raise RuntimeError(message)
+        return LLMRunResult(True, False, raw, parsed, message)
     parsed = parse_llm_output(raw)
     ok = completed.returncode == 0 and parsed.ok
     if require_llm and not ok:

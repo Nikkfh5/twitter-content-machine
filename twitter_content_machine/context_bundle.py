@@ -99,7 +99,7 @@ def build_context_bundle(
         "source_manifest": source_manifest,
     }
     markdown = _bundle_markdown(bundle)
-    request = _llm_request(markdown)
+    request = _llm_request(bundle)
     md_path = draft_folder / "13_context_bundle.md"
     json_path = draft_folder / "13_context_bundle.json"
     request_path = draft_folder / "14_llm_request.md"
@@ -141,10 +141,32 @@ def _bundle_markdown(bundle: dict[str, Any]) -> str:
     return "\n\n".join(parts)
 
 
-def _llm_request(bundle_markdown: str) -> str:
+def _compact_memory(memory: list[dict[str, Any]], limit: int = 3) -> str:
+    if not memory:
+        return "- none"
+    lines = []
+    for item in memory[:limit]:
+        text = " ".join(str(item.get("text", "")).split())
+        lines.append(f"- {item.get('kind', item.get('type', 'memory'))} {item.get('id', '')}: {_clip(text, 280)}")
+    return "\n".join(lines)
+
+
+def _llm_request(bundle: dict[str, Any]) -> str:
+    task = bundle["task"]
+    account = bundle["account_positioning"]
+    project = bundle["project_context"]
+    identity = str(bundle.get("identity_style") or "")
     return f"""# LLM Draft Request
 
-Use the context bundle below. Return strict JSON only with this schema:
+Generate X/Twitter draft text from this compact request.
+
+Full inspectable context is available in this draft folder:
+- 13_context_bundle.md
+- 13_context_bundle.json
+
+Use the compact context below first. Read full bundle files only if the compact context is insufficient.
+
+Return strict JSON only. Do not wrap it in markdown. Use this schema:
 
 ```json
 {{
@@ -171,8 +193,52 @@ Use the context bundle below. Return strict JSON only with this schema:
 ```
 
 Draft only. Never publish. Never call X write APIs.
+Do not run shell commands unless you must inspect the local context files above.
+Do not modify files.
 
----
+## Task
 
-{bundle_markdown}
+```json
+{json.dumps(task, indent=2, ensure_ascii=False)}
+```
+
+## Account Rules
+
+Persona:
+{_clip(account.get("persona", ""), 900)}
+
+Style:
+{_clip(account.get("style", ""), 900)}
+
+Safety:
+{_clip(account.get("safety", ""), 700)}
+
+Forbidden phrases:
+{_clip(account.get("forbidden_phrases", ""), 600)}
+
+Algorithm principles:
+{_clip(account.get("x_algorithm_principles", ""), 1000)}
+
+## Project Public Angle
+
+{_clip(project.get("public_angle", ""), 900)}
+
+## Related Memory
+
+{_compact_memory(bundle.get("related_memory", []))}
+
+## Identity Style
+
+{_clip(identity, 2200)}
+
+## Output Requirements
+
+- Variant A should be direct/raw.
+- Variant B should be clearer/structured.
+- Variant C should be sharper, but not fake-contrarian.
+- Final candidate should be usable as a first post about the project.
+- Keep uncertainty if the project is just starting.
+- Avoid financial advice, trading signals, crypto shilling, and generic launch hype.
+- Prefer concrete benchmark language over broad promises.
+
 """

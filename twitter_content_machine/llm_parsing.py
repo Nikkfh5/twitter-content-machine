@@ -17,14 +17,51 @@ REQUIRED_KEYS = {"variants", "critique", "selected_variant_id", "final_candidate
 
 
 def _extract_json(text: str) -> str | None:
-    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.IGNORECASE | re.DOTALL)
-    if fenced:
-        return fenced.group(1)
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1 or end <= start:
+    leading = _decode_json_object(text.lstrip())
+    if leading is not None:
+        return leading
+
+    fenced_candidates = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.IGNORECASE | re.DOTALL)
+    first_valid: str | None = None
+    for candidate in fenced_candidates:
+        decoded = _decode_json_object(candidate.strip())
+        if decoded is None:
+            continue
+        if first_valid is None:
+            first_valid = decoded
+        if _has_required_keys(decoded):
+            return decoded
+    if first_valid is not None:
+        return first_valid
+
+    first_decoded: str | None = None
+    for match in re.finditer(r"\{", text):
+        decoded = _decode_json_object(text[match.start() :].lstrip())
+        if decoded is None:
+            continue
+        if first_decoded is None:
+            first_decoded = decoded
+        if _has_required_keys(decoded):
+            return decoded
+    return first_decoded
+
+
+def _decode_json_object(text: str) -> str | None:
+    try:
+        data, _end = json.JSONDecoder().raw_decode(text)
+    except json.JSONDecodeError:
         return None
-    return text[start : end + 1]
+    if not isinstance(data, dict):
+        return None
+    return json.dumps(data, ensure_ascii=False)
+
+
+def _has_required_keys(raw: str) -> bool:
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(data, dict) and REQUIRED_KEYS <= set(data)
 
 
 def parse_llm_output(text: str) -> ParsedLLMOutput:

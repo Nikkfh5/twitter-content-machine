@@ -55,7 +55,9 @@ When implementing or debugging LLM generation:
   project directory.
 - Source project `AGENTS.md` may be summarized into `13_context_bundle.md/json`,
   but must not become active instruction for content generation.
-- Prefer isolated `CODEX_HOME=<draft_folder>/.codex_home`.
+- The draft folder always gets content-specific `AGENTS.md` /
+  `AGENTS.override.md`; `CODEX_HOME=<draft_folder>/.codex_home` is used only
+  when that isolated home has Codex auth, otherwise normal Codex auth is reused.
 
 Setup:
 - `pip install -e .`

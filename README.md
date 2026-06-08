@@ -233,7 +233,7 @@ source project cwd
   -> identity_style examples
   -> 13_context_bundle.md/json
   -> 14_llm_request.md
-  -> isolated draft folder generation
+  -> draft-folder Codex generation
   -> parsed variants/final
 ```
 
@@ -262,7 +262,11 @@ Critical behavior:
 - `tw` may be launched from any project folder.
 - Source project context is summarized into the bundle.
 - Content generation runs from the draft folder, not from the source project.
-- `AGENTS.override.md` and `.codex_home/AGENTS.md` are content-generation instructions only.
+- `AGENTS.md`, `AGENTS.override.md`, and `.codex_home/AGENTS.md` in the draft
+  folder are content-generation instructions only.
+- `CODEX_HOME` is isolated only when the draft-local `.codex_home` contains
+  Codex auth; otherwise global Codex auth is reused while the active cwd and
+  AGENTS instructions remain draft-local.
 - Source project `AGENTS.md` may be summarized as context, but must not become active instructions for drafting.
 - `tw draft "..."` requires Codex CLI; if Codex is missing or returns invalid output, the command fails after writing the report.
 - `--no-llm` and `--context-only` are explicit local fallback/debug modes.

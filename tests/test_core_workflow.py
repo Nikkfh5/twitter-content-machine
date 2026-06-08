@@ -208,11 +208,16 @@ def test_context_only_draft_creates_bundle_and_isolated_generation_workspace(
 
     assert (folder / "14_llm_request.md").exists()
     assert (folder / "16_llm_parse_report.md").exists()
+    assert (folder / "AGENTS.md").exists()
     assert (folder / "AGENTS.override.md").exists()
     assert (folder / ".codex_home" / "AGENTS.md").exists()
     assert (folder / ".codex_home" / "config.toml").exists()
     assert "Source Project" in bundle_md
     assert "SECRET_TOKEN" not in bundle_md
+    request_text = (folder / "14_llm_request.md").read_text(encoding="utf-8")
+    assert len(request_text) < len(bundle_md)
+    assert "13_context_bundle.md" in request_text
+    assert "Return strict JSON only" in request_text
     assert bundle_json["task"]["cwd"] == str(project.resolve())
     assert bundle_json["source_manifest"]
     override = (folder / "AGENTS.override.md").read_text(encoding="utf-8")
@@ -361,6 +366,41 @@ def test_llm_parser_handles_plain_and_fenced_json() -> None:
     assert parsed.data["final_candidate"] == "Small note."
 
 
+def test_llm_parser_prefers_leading_json_over_schema_echo_in_stderr() -> None:
+    good = {
+        "variants": [
+            {
+                "id": "A",
+                "name": "direct_raw",
+                "text": "Real draft.",
+                "intent": "dwell",
+                "why_it_might_work": "specific",
+                "risks": [],
+            }
+        ],
+        "critique": {
+            "real_point": "ok",
+            "too_generic": False,
+            "overclaim_risk": "low",
+            "financial_advice_risk": "low",
+            "confidentiality_risk": "low",
+            "repetition_risk": "low",
+            "identity_style_risk": "low",
+            "algorithm_fit": "ok",
+        },
+        "selected_variant_id": "A",
+        "final_candidate": "Real draft.",
+        "media_suggestion": {"use_media": False, "type": "none", "reason": "none"},
+        "manual_notes": [],
+    }
+    schema_echo = '```json\n{"final_candidate": "..."}\n```'
+
+    parsed = parse_llm_output(json.dumps(good) + "\n\nSTDERR:\n" + schema_echo)
+
+    assert parsed.ok is True
+    assert parsed.data["final_candidate"] == "Real draft."
+
+
 def test_llm_parser_reports_invalid_output() -> None:
     parsed = parse_llm_output("not json")
 
@@ -392,14 +432,65 @@ def test_codex_invocation_plan_uses_draft_folder_and_isolated_home(
 
     draft_folder = tmp_path / "draft"
     draft_folder.mkdir()
-    plan = build_codex_invocation_plan("{}", draft_folder, load_config(tw_root))
+    raw_request = '{"final_candidate": "x"} & echo should-not-run'
+    plan = build_codex_invocation_plan(raw_request, draft_folder, load_config(tw_root))
 
     assert plan.cwd == draft_folder
-    assert plan.env["CODEX_HOME"] == str(draft_folder / ".codex_home")
+    assert "CODEX_HOME" not in plan.env
     assert "--cd" in plan.command
     assert str(draft_folder) in plan.command
     assert "--model" in plan.command
     assert "gpt-5.5" in plan.command
+    assert "--config" in plan.command
+    assert 'model_reasoning_effort="xhigh"' in plan.command
+    assert 'service_tier="fast"' in plan.command
+    assert plan.command[-1] == "-"
+    assert raw_request not in plan.command
+
+    (draft_folder / ".codex_home").mkdir()
+    (draft_folder / ".codex_home" / "auth.json").write_text("{}", encoding="utf-8")
+    isolated_plan = build_codex_invocation_plan(raw_request, draft_folder, load_config(tw_root))
+    assert isolated_plan.env["CODEX_HOME"] == str(draft_folder / ".codex_home")
+
+
+def test_codex_runner_sends_prompt_via_stdin_and_reports_nonzero_stderr(
+    tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace()
+    request = tmp_path / "14_llm_request.md"
+    request.write_text('{"prompt": "contains & shell chars"}', encoding="utf-8")
+    draft_folder = tmp_path / "draft"
+    draft_folder.mkdir()
+    calls = []
+
+    class Completed:
+        returncode = 2
+        stdout = ""
+        stderr = "codex failed before model output"
+
+    monkeypatch.setattr("twitter_content_machine.llm.shutil.which", lambda command: "C:/bin/codex.cmd")
+    monkeypatch.setattr(
+        "twitter_content_machine.llm.detect_codex_capabilities",
+        lambda command="codex": {"exec": True, "cd": True, "model": True, "config": True},
+    )
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return Completed()
+
+    monkeypatch.setattr("twitter_content_machine.llm.subprocess.run", fake_run)
+
+    from twitter_content_machine.llm import run_llm
+
+    result = run_llm("codex", request, draft_folder, load_config(tw_root))
+
+    assert calls
+    command, kwargs = calls[0]
+    assert command[-1] == "-"
+    assert kwargs["input"] == '{"prompt": "contains & shell chars"}'
+    assert result.ok is False
+    assert "codex failed before model output" in result.message
+    assert result.parsed.error == "Codex exited with code 2"
 
 
 def test_open_latest_resolves_existing_draft_without_gui(tw_root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

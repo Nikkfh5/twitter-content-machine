@@ -55,9 +55,16 @@ tw draft "сегодня понял что execution assumptions в бэктес
 14_llm_request.md
 15_llm_raw_output.md
 16_llm_parse_report.md
+AGENTS.md
 AGENTS.override.md
 .codex_home/AGENTS.md
 ```
+
+Codex запускается из папки черновика, поэтому активные инструкции для генерации
+берутся из draft-local `AGENTS.md`, а не из `AGENTS.md` кодового проекта.
+Изолированный `CODEX_HOME` включается только если в `.codex_home` уже есть auth;
+иначе используется обычная авторизация Codex, но рабочая папка всё равно остаётся
+папкой черновика.
 
 Если Codex CLI не найден или сломался, обычный `tw draft "..."` падает с ошибкой.
 Локальный шаблонный fallback включается только явно через `--no-llm`.

@@ -32,7 +32,10 @@ These are config defaults and must stay overrideable.
   instruction context.
 - Source project `AGENTS.md` may be summarized in a context bundle, but must not
   become active content-generation instructions.
-- Prefer isolated `CODEX_HOME=<draft_folder>/.codex_home`.
+- The draft folder must provide content-specific `AGENTS.md` /
+  `AGENTS.override.md`. Isolate `CODEX_HOME=<draft_folder>/.codex_home` only
+  when that isolated home has Codex auth; otherwise reuse normal Codex auth
+  while keeping cwd/instructions draft-local.
 
 ## Scope
 
@@ -95,7 +98,8 @@ X API support is read-only and testable by mocking HTTP. Missing credentials for
   `speed = "fast"`.
 - Every draft creates context artifacts: `13_context_bundle.md`,
   `13_context_bundle.json`, `14_llm_request.md`, `16_llm_parse_report.md`,
-  `AGENTS.override.md`, and isolated `.codex_home/`.
+  draft-local `AGENTS.md`, `AGENTS.override.md`, and `.codex_home/` support
+  files.
 - `tw draft` supports `--llm`, `--model`, `--reasoning-effort`, `--speed`,
   `--require-llm`, `--no-llm`, `--context-only`, and `--print-prompt-path`.
 - LLM parser handles raw JSON and fenced JSON; failures preserve fallback drafts.
