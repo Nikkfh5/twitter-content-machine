@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .config import load_config
 from .drafting import get_draft
-from .llm import resolve_codex_command
+from .llm import _isolated_codex_home_has_auth, resolve_codex_command
 from .state import resolve_active_draft_id
 from .utils import get_now, short_hash, slugify
 from .workspace import ensure_workspace, read_profile
@@ -60,8 +60,9 @@ def run_codex_session(session: CodexSessionResult) -> CodexSessionResult:
     if not resolved:
         raise RuntimeError(f"{config.llm_codex_command} not found")
     env = os.environ.copy()
-    if config.llm_codex_isolate_home:
-        env["CODEX_HOME"] = str(session.session_dir / ".codex_home")
+    isolated_home = session.session_dir / ".codex_home"
+    if config.llm_codex_isolate_home and _isolated_codex_home_has_auth(isolated_home):
+        env["CODEX_HOME"] = str(isolated_home)
     completed = subprocess.run([resolved], cwd=session.session_dir, env=env, check=False)
     return CodexSessionResult(session.session_dir, [resolved], True, completed.returncode)
 
@@ -99,6 +100,9 @@ You are finalizing X/Twitter content for Nikita.
 Hard rules:
 - Draft/finalization only. Never publish.
 - Never call X write APIs.
+- Default output language is English.
+- If input notes are Russian or mixed-language, translate/adapt the meaning into
+  English unless the user explicitly asks for another language.
 - Do not inspect parent repositories.
 - Do not modify files outside this session folder.
 - Use `INPUT.md`, `CONTEXT_BUNDLE.md`, `TASK.md`, and `OUTPUT_SCHEMA.md`.
@@ -132,6 +136,7 @@ User instruction:
 
 Goal:
 - produce final text variants, not code
+- write final candidates in English by default, even if the source notes are Russian
 - preserve the real point
 - make the result usable as a human-reviewed final candidate
 - do not publish
@@ -162,6 +167,7 @@ Write:
 - `output/notes.md` if needed
 
 The first post of the thread must stand alone. Each next post must add independent value.
+Write the thread in English by default.
 """
     return """# Output Schema
 
@@ -172,6 +178,7 @@ Write:
 - `output/notes.md` if needed
 
 The final post must be concise, concrete, and safe for manual review.
+Write the final post in English by default.
 """
 
 

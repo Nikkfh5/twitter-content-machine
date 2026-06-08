@@ -156,6 +156,7 @@ def _llm_request(bundle: dict[str, Any]) -> str:
     account = bundle["account_positioning"]
     project = bundle["project_context"]
     identity = str(bundle.get("identity_style") or "")
+    output_language = "English" if str(task.get("language", "en")).lower() != "ru" else "Russian"
     return f"""# LLM Draft Request
 
 Generate X/Twitter draft text from this compact request.
@@ -165,6 +166,10 @@ Full inspectable context is available in this draft folder:
 - 13_context_bundle.json
 
 Use the compact context below first. Read full bundle files only if the compact context is insufficient.
+
+Output language: {output_language}.
+If the raw idea, notes, identity examples, or user instructions are in another language, translate/adapt the meaning into {output_language}. Do not keep the final post in the input language unless it is {output_language}.
+For the default workflow, all variant texts, final_candidate text, and short explanatory fields must be in {output_language}.
 
 Return strict JSON only. Do not wrap it in markdown. Use this schema:
 
@@ -236,7 +241,7 @@ Algorithm principles:
 - Variant A should be direct/raw.
 - Variant B should be clearer/structured.
 - Variant C should be sharper, but not fake-contrarian.
-- Final candidate should be usable as a first post about the project.
+- Final candidate should be usable as a first post about the project and written in {output_language}.
 - Keep uncertainty if the project is just starting.
 - Avoid financial advice, trading signals, crypto shilling, and generic launch hype.
 - Prefer concrete benchmark language over broad promises.

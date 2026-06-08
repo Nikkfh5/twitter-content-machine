@@ -12,6 +12,7 @@ import pytest
 from twitter_content_machine import mcp_server
 from twitter_content_machine.cli import run_cli
 from twitter_content_machine.config import load_config
+from twitter_content_machine.codex_session import CodexSessionResult, run_codex_session
 from twitter_content_machine.db import connect_db, resolve_draft_id
 from twitter_content_machine.drafting import create_draft
 from twitter_content_machine.llm import build_codex_invocation_plan, resolve_codex_command
@@ -42,7 +43,7 @@ def test_ensure_creates_workspace_and_is_idempotent(tw_root: Path) -> None:
     assert (tw_root / "db" / "content.sqlite").exists()
 
     config = load_config(tw_root)
-    assert config.default_language == "auto"
+    assert config.default_language == "en"
     assert config.llm_mode == "auto"
     assert config.llm_model == "gpt-5.5"
     assert config.llm_reasoning_effort == "xhigh"
@@ -70,6 +71,15 @@ def test_ensure_creates_workspace_and_is_idempotent(tw_root: Path) -> None:
         "drafts_fts",
         "telegram_messages_fts",
     } <= tables
+
+
+def test_legacy_auto_language_normalizes_to_english(tw_root: Path) -> None:
+    ensure_workspace()
+    (tw_root / "config.toml").write_text('default_language = "auto"\n', encoding="utf-8")
+
+    config = load_config(tw_root)
+
+    assert config.default_language == "en"
 
 
 def test_project_context_is_central_and_project_directory_is_unchanged(
@@ -218,6 +228,8 @@ def test_context_only_draft_creates_bundle_and_isolated_generation_workspace(
     assert len(request_text) < len(bundle_md)
     assert "13_context_bundle.md" in request_text
     assert "Return strict JSON only" in request_text
+    assert "Output language: English" in request_text
+    assert "translate/adapt the meaning into English" in request_text
     assert bundle_json["task"]["cwd"] == str(project.resolve())
     assert bundle_json["source_manifest"]
     override = (folder / "AGENTS.override.md").read_text(encoding="utf-8")
@@ -584,16 +596,26 @@ def test_edit_current_draft_uses_codex_and_updates_final_candidate(
     class Completed:
         returncode = 0
         stdout = '{"final_candidate": "Shorter execution note."}'
-        stderr = ""
+        stderr = 'debug echoed schema: {"final_candidate": "..."}'
 
     monkeypatch.setattr("twitter_content_machine.llm.shutil.which", lambda command: "C:/bin/codex.exe")
     monkeypatch.setattr("twitter_content_machine.llm.detect_codex_capabilities", lambda command="codex": {"exec": True, "cd": True, "model": True, "config": False})
-    monkeypatch.setattr("twitter_content_machine.editing.subprocess.run", lambda command, **kwargs: Completed())
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return Completed()
+
+    monkeypatch.setattr("twitter_content_machine.editing.subprocess.run", fake_run)
 
     assert run_cli(["edit", "make it shorter"], cwd=project) == 0
     output = capsys.readouterr().out
 
     assert "Shorter execution note." in output
+    assert calls
+    assert calls[0][0][-1] == "-"
+    assert calls[0][1]["input"]
+    assert "Default output language is English" in calls[0][1]["input"]
     assert (draft.folder / "06_final_candidate.md").read_text(encoding="utf-8") == "Shorter execution note.\n"
     assert (draft.folder / "17_edit_request.md").exists()
     assert (draft.folder / "18_edit_raw_output.md").exists()
@@ -686,6 +708,9 @@ def test_codex_prepare_from_active_draft_creates_content_session(
     assert "Style Gold" in (session / "CONTEXT_BUNDLE.md").read_text(encoding="utf-8")
     assert "Content Gold" in (session / "CONTEXT_BUNDLE.md").read_text(encoding="utf-8")
     assert "Run tests" not in (session / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Default output language is English" in (session / "AGENTS.md").read_text(encoding="utf-8")
+    assert "write final candidates in English" in (session / "TASK.md").read_text(encoding="utf-8")
+    assert "Write the thread in English by default" in (session / "OUTPUT_SCHEMA.md").read_text(encoding="utf-8")
     assert draft.id in (session / "TASK.md").read_text(encoding="utf-8")
 
 
@@ -730,7 +755,12 @@ def test_codex_run_invokes_codex_from_session_folder(
     session = Path(kwargs["cwd"])
     assert command == ["C:/bin/codex.exe"]
     assert session.parent == tw_root / "codex_sessions"
-    assert kwargs["env"]["CODEX_HOME"] == str(session / ".codex_home")
+    assert "CODEX_HOME" not in kwargs["env"]
+
+    (session / ".codex_home" / "auth.json").write_text("{}", encoding="utf-8")
+    run_codex_session(CodexSessionResult(session, ["C:/bin/codex.exe"], False, None))
+    _, isolated_kwargs = calls[-1]
+    assert isolated_kwargs["env"]["CODEX_HOME"] == str(session / ".codex_home")
 
 
 def test_algo_review_media_and_distribution_commands_create_review_files(

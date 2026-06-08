@@ -16,6 +16,7 @@ context bundle -> isolated generation workspace -> parse output -> review artifa
 
 The main correction:
 
+- default language: `en`
 - default model: `gpt-5.5`
 - default reasoning effort: `xhigh`
 - default speed: `fast`
@@ -82,6 +83,8 @@ creates drafts and records parse/failure status.
 Update after smart-default pass:
 
 - Normal `tw draft "<text>"` now uses Codex CLI through `[llm].mode = "auto"`.
+- Normal `tw draft "<text>"` writes English content by default, even when the
+  raw idea is Russian or mixed-language.
 - No OpenAI API path is exposed in the public draft command.
 - `--no-llm` and `--context-only` are explicit local fallback/debug modes.
 - Missing Codex or invalid Codex output makes the command fail after writing
@@ -94,8 +97,8 @@ X API support is read-only and testable by mocking HTTP. Missing credentials for
 
 ## Implemented In This Pass
 
-- Config defaults: `model = "gpt-5.5"`, `reasoning_effort = "xhigh"`,
-  `speed = "fast"`.
+- Config defaults: `default_language = "en"`, `model = "gpt-5.5"`,
+  `reasoning_effort = "xhigh"`, `speed = "fast"`.
 - Every draft creates context artifacts: `13_context_bundle.md`,
   `13_context_bundle.json`, `14_llm_request.md`, `16_llm_parse_report.md`,
   draft-local `AGENTS.md`, `AGENTS.override.md`, and `.codex_home/` support

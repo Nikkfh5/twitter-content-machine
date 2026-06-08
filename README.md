@@ -240,6 +240,8 @@ source project cwd
 Defaults in `config.toml`:
 
 ```toml
+default_language = "en"
+
 [llm]
 mode = "auto"
 model = "gpt-5.5"
@@ -260,6 +262,8 @@ tw draft --context-only --print-prompt-path "raw idea"
 Critical behavior:
 
 - `tw` may be launched from any project folder.
+- Default content output is English. Russian or mixed-language input notes are
+  translated/adapted into English draft text.
 - Source project context is summarized into the bundle.
 - Content generation runs from the draft folder, not from the source project.
 - `AGENTS.md`, `AGENTS.override.md`, and `.codex_home/AGENTS.md` in the draft

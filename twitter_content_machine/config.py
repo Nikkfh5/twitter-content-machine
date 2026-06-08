@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 DEFAULT_CONFIG = """# Twitter Content Machine
-default_language = "auto" # auto | en | ru
+default_language = "en" # en | ru
 context_cache_minutes = 30
 
 [llm]
@@ -85,7 +85,7 @@ def load_config(root: Path | None = None) -> Config:
     llm_mode = raw_llm_mode if raw_llm_mode in {"auto", "codex"} else "auto"
     return Config(
         root=root,
-        default_language=str(data.get("default_language", "auto")),
+        default_language=_normalize_default_language(str(data.get("default_language", "en"))),
         llm_mode=llm_mode,
         llm_model=str(llm.get("model", os.environ.get("OPENAI_MODEL", "gpt-5.5"))),
         llm_reasoning_effort=str(llm.get("reasoning_effort", os.environ.get("OPENAI_REASONING_EFFORT", "xhigh"))),
@@ -109,3 +109,10 @@ def load_config(root: Path | None = None) -> Config:
         x_exclude_replies=bool(x.get("exclude_replies", False)),
         x_exclude_retweets=bool(x.get("exclude_retweets", True)),
     )
+
+
+def _normalize_default_language(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized == "ru":
+        return "ru"
+    return "en"

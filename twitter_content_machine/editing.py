@@ -43,7 +43,10 @@ def edit_draft_with_codex(draft_id: str | None, instruction: str) -> EditResult:
         plan.command,
         cwd=plan.cwd,
         env=plan.env,
+        input=request,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         timeout=config.llm_codex_timeout_seconds,
         check=False,
@@ -90,6 +93,10 @@ def _build_edit_request(folder: Path, current: str, instruction: str) -> str:
 
 Never publish. Never call X write APIs. Do not inspect parent repositories.
 Use only the context included in this prompt and files in this draft folder.
+Default output language is English. If the current candidate or user instruction
+is Russian or mixed-language, translate/adapt the meaning into English. The
+returned final_candidate must be English unless the instruction explicitly says
+to output another language.
 
 Current final candidate:
 {current}
@@ -120,14 +127,29 @@ def _parse_edit_output(raw: str) -> tuple[str, str]:
 
 
 def _extract_json(text: str) -> str | None:
-    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.IGNORECASE | re.DOTALL)
-    if fenced:
-        return fenced.group(1)
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1 or end <= start:
+    leading = _decode_json_object(text.lstrip())
+    if leading is not None:
+        return leading
+    fenced_candidates = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.IGNORECASE | re.DOTALL)
+    for candidate in fenced_candidates:
+        decoded = _decode_json_object(candidate.strip())
+        if decoded is not None:
+            return decoded
+    for match in re.finditer(r"\{", text):
+        decoded = _decode_json_object(text[match.start() :].lstrip())
+        if decoded is not None:
+            return decoded
+    return None
+
+
+def _decode_json_object(text: str) -> str | None:
+    try:
+        data, _end = json.JSONDecoder().raw_decode(text)
+    except json.JSONDecodeError:
         return None
-    return text[start : end + 1]
+    if not isinstance(data, dict):
+        return None
+    return json.dumps(data, ensure_ascii=False)
 
 
 def _read_optional(path: Path) -> str:

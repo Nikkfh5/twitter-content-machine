@@ -9,6 +9,9 @@ AGENTS_OVERRIDE = """# Draft Generation Instructions
 
 You are generating draft X/Twitter content for Nikita.
 Draft only. Never publish. Never call X write APIs.
+Default output language is English. If input notes are Russian or mixed-language,
+translate/adapt the meaning into English unless the request explicitly overrides
+the language.
 
 Use only the context files in this draft folder:
 - 13_context_bundle.md

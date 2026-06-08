@@ -67,6 +67,8 @@ Setup:
 CLI workflow:
 - Capture: `tw idea "<text>"`, `tw capture`
 - Draft: `tw draft "<text>"` uses Codex CLI, short format, X-fit review, and default identity style when available.
+- Default content output language is English. Russian or mixed-language raw
+  ideas should be translated/adapted into English draft text.
 - Format override: `tw draft --thread|--article-note|--build-log|--question "<text>"`; `--short` is default.
 - LLM/context flags such as `--llm`, `--model`, `--reasoning-effort`,
   `--speed`, `--no-llm`, and `--context-only` are debug/advanced, not daily UX.
@@ -115,7 +117,8 @@ Draft artifacts:
   `11_examples_used.md`, and `12_risk_flags.md`.
 - Treat generation as workshop output: variants, critique, anti-GPT pass, final candidate.
 - Default LLM config is `mode = "auto"`, `model = "gpt-5.5"`,
-  `reasoning_effort = "xhigh"`, `speed = "fast"`. `tw draft` requires Codex
+  `reasoning_effort = "xhigh"`, `speed = "fast"`, `default_language = "en"`.
+  `tw draft` requires Codex
   CLI unless `--no-llm` or `--context-only` is used.
 - Active draft state lives at `~/twitter-system/state/current_draft.txt`.
   This is only a pointer to the current draft id; it is not content memory.
