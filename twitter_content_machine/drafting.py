@@ -80,6 +80,12 @@ def _variant_thread(text: str) -> str:
 
 
 def generate_variants(text: str, draft_type: str, identity_style_active: bool = False) -> tuple[str, str, str]:
+    if draft_type == "adaptive":
+        return (
+            f"I want to make this project note more than a one-line update:\n\n{text}\n\nThe useful part is the connection between previous project work, benchmark design, and the next thing I want to build.",
+            f"Current project note:\n\n{text}\n\nThe thread running through this is benchmark realism. I do not want to claim a result too early; I want to show the setup, the assumptions, and what becomes hard to fake.",
+            f"This is the part I want to explain better:\n\n{text}\n\nIt is not just a new topic. It is a continuation of learning how large technical projects fail around protocol, data, baselines, and assumptions.",
+        )
     if identity_style_active:
         return (
             f"Clean current-account version:\n\nSmall note from building: {text}.\n\nCurrent guess: the useful part is not the take itself, but which assumption broke.",

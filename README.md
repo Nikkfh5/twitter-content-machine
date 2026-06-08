@@ -52,6 +52,10 @@ tw analyze-own --sync
 `draft_id` and operate on that active draft. `tw path` prints the active draft
 folder without opening a GUI.
 
+Default draft format is adaptive: short only when the idea is small, fuller
+single-post drafts when the idea has enough context. Use `--short` only when
+you explicitly want a compact post.
+
 Debug-only draft flags such as `--llm`, `--model`, `--reasoning-effort`,
 `--speed`, `--context-only`, and `--no-llm` still exist, but they are not part
 of the daily workflow.

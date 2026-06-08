@@ -157,6 +157,8 @@ def _llm_request(bundle: dict[str, Any]) -> str:
     project = bundle["project_context"]
     identity = str(bundle.get("identity_style") or "")
     output_language = "English" if str(task.get("language", "en")).lower() != "ru" else "Russian"
+    draft_type = str(task.get("draft_type", "adaptive"))
+    length_rules = _length_rules(draft_type)
     return f"""# LLM Draft Request
 
 Generate X/Twitter draft text from this compact request.
@@ -242,8 +244,24 @@ Algorithm principles:
 - Variant B should be clearer/structured.
 - Variant C should be sharper, but not fake-contrarian.
 - Final candidate should be usable as a first post about the project and written in {output_language}.
+- Do not make the post artificially short.
+- {length_rules}
 - Keep uncertainty if the project is just starting.
 - Avoid financial advice, trading signals, crypto shilling, and generic launch hype.
 - Prefer concrete benchmark language over broad promises.
 
 """
+
+
+def _length_rules(draft_type: str) -> str:
+    if draft_type == "short":
+        return "Because the user explicitly selected short format, keep it compact: one strong idea, usually 1-3 short paragraphs."
+    if draft_type == "thread":
+        return "Because this is a thread, each post must add independent value; do not stretch one small idea across many posts."
+    if draft_type == "question":
+        return "Because this is a question, keep the setup concise and make the question bounded and technical."
+    if draft_type == "build-log":
+        return "Because this is a build log, use enough space to show what changed, what broke, and what the next check is."
+    if draft_type == "article-note":
+        return "Because this is an article note, include the takeaway, disagreement or uncertainty, and what should be tested."
+    return "Adaptive length: if the idea has substance, prefer a fuller single post with 2-5 short paragraphs; use a short post only when the idea is genuinely small."

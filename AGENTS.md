@@ -66,10 +66,10 @@ Setup:
 
 CLI workflow:
 - Capture: `tw idea "<text>"`, `tw capture`
-- Draft: `tw draft "<text>"` uses Codex CLI, short format, X-fit review, and default identity style when available.
+- Draft: `tw draft "<text>"` uses Codex CLI, adaptive format, X-fit review, and default identity style when available.
 - Default content output language is English. Russian or mixed-language raw
   ideas should be translated/adapted into English draft text.
-- Format override: `tw draft --thread|--article-note|--build-log|--question "<text>"`; `--short` is default.
+- Format override: `tw draft --short|--thread|--article-note|--build-log|--question "<text>"`; adaptive is default.
 - LLM/context flags such as `--llm`, `--model`, `--reasoning-effort`,
   `--speed`, `--no-llm`, and `--context-only` are debug/advanced, not daily UX.
 - Identity-style override/debug: `tw draft --identity-style none "<text>"`

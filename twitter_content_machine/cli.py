@@ -80,7 +80,7 @@ def _draft_type_from_args(args: argparse.Namespace) -> str:
     for name in ["thread", "article_note", "build_log", "question", "short"]:
         if getattr(args, name, False):
             return name.replace("_", "-")
-    return "short"
+    return "adaptive"
 
 
 def _built_identity_profile_exists(profile_name: str) -> bool:

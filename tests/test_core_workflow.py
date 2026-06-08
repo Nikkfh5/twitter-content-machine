@@ -144,6 +144,46 @@ def test_draft_creates_expected_files_without_llm(tw_root: Path, tmp_path: Path)
     assert Path(row["folder_path"]) == draft.folder
 
 
+def test_plain_draft_defaults_to_adaptive_format(
+    tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tmp_path / "adaptive-default"
+    project.mkdir()
+    ensure_workspace()
+    monkeypatch.setattr("twitter_content_machine.llm.resolve_codex_command", lambda command: None)
+
+    assert run_cli(["draft", "--no-llm", "raw project thought with enough context"], cwd=project) == 0
+
+    draft_id = resolve_draft_id("latest")
+    with connect_db() as conn:
+        row = conn.execute("select type, folder_path from drafts where id = ?", (draft_id,)).fetchone()
+    folder = Path(row["folder_path"])
+    request = (folder / "14_llm_request.md").read_text(encoding="utf-8")
+    meta = (folder / "meta.yaml").read_text(encoding="utf-8")
+
+    assert row["type"] == "adaptive"
+    assert "type: adaptive" in meta
+    assert "Do not make the post artificially short" in request
+    assert "2-5 short paragraphs" in request
+
+
+def test_short_flag_keeps_explicit_short_format(
+    tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tmp_path / "explicit-short"
+    project.mkdir()
+    ensure_workspace()
+    monkeypatch.setattr("twitter_content_machine.llm.resolve_codex_command", lambda command: None)
+
+    assert run_cli(["draft", "--no-llm", "--short", "small note"], cwd=project) == 0
+
+    draft_id = resolve_draft_id("latest")
+    with connect_db() as conn:
+        row = conn.execute("select type from drafts where id = ?", (draft_id,)).fetchone()
+
+    assert row["type"] == "short"
+
+
 def test_idea_cli_search_and_fts(tw_root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     project = tmp_path / "ml-infra"
     project.mkdir()

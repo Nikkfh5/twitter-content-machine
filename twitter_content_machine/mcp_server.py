@@ -37,7 +37,7 @@ def tw_save_idea(text: str, url: str | None = None, tags: str | None = None, cwd
 
 def tw_create_draft(
     text: str,
-    type: str = "short",
+    type: str = "adaptive",
     identity_style: str | None = None,
     identity_strength: float = 0.35,
     algo_aware: bool = False,

@@ -52,8 +52,8 @@ Never:
 
 - New default draft: `tw draft "<idea>"`
 - New short draft: `tw draft --short "<idea>"`
-- Local fallback draft: `tw draft --no-llm --short "<idea>"`
-- Context-only request: `tw draft --context-only --print-prompt-path --short "<idea>"`
+- Local fallback draft: `tw draft --no-llm "<idea>"`
+- Context-only request: `tw draft --context-only --print-prompt-path "<idea>"`
 - New thread: `tw draft --thread "<idea>"`
 - Build log from current repo: `tw draft --build-log "<update>"`
 - Show active draft: `tw show`
@@ -72,13 +72,13 @@ Never:
 - Algorithm review: `tw algo-review`
 - Media plan: `tw media-plan`
 - Distribution plan: `tw distribution-plan`
-- Disable X-fit review once: `tw draft --no-algo-aware --short "<idea>"`
+- Disable X-fit review once: `tw draft --no-algo-aware "<idea>"`
 - Import Telegram identity pack: `tw tg-import "<path>" --profile tg_crypto_clean`
 - Build style profile: `tw style-build tg_crypto_clean --auto`
 - Refresh style profile: `tw style-refresh tg_crypto_clean`
 - Style stats: `tw style-stats tg_crypto_clean`
 - Curate style profile: `tw style-curate tg_crypto_clean`
-- Identity-style draft: `tw draft --identity-style tg_crypto_clean --identity-strength 0.35 --short "<idea>"`
+- Identity-style draft: `tw draft --identity-style tg_crypto_clean --identity-strength 0.35 "<idea>"`
 - Identity/style review: `tw style-review --profile tg_crypto_clean`
 - Sync own X posts read-only: `tw sync-posted`
 - Analyze own posts: `tw analyze-own --sync`
