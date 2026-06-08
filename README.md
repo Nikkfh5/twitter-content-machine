@@ -72,6 +72,12 @@ Future style-learning backlog:
 docs/style-learning-from-posts-backlog.md
 ```
 
+Top-level product roadmap:
+
+```text
+docs/product-roadmap.md
+```
+
 ## Active Draft UX
 
 The current draft pointer is stored centrally:

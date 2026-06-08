@@ -6,6 +6,9 @@ Session anchor:
 - base_commit: `4d791cd`
 - feature_id: `algorithm-aware-review-layer`
 
+Top-level roadmap:
+- `docs/product-roadmap.md`
+
 ## Core Idea
 
 Add an algorithm-aware review layer to the local draft-only X/Twitter content
@@ -162,4 +165,3 @@ Why strong:
 Why postponed:
 - credentials must never be read as content context
 - MVP must remain useful without network/API
-

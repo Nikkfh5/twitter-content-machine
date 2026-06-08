@@ -191,6 +191,8 @@ Telegram identity/style:
   `ready`, `posted`, and locally stored own posts.
 
 Durable docs / resume:
+- Product roadmap:
+  `docs/product-roadmap.md`
 - Russian CLI guide: `docs/cli_descripsion_russion.md`
 - Style learning from future posts backlog:
   `docs/style-learning-from-posts-backlog.md`
