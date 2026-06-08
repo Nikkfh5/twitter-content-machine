@@ -248,6 +248,8 @@ model = "gpt-5.5"
 reasoning_effort = "xhigh"
 speed = "fast"
 codex_isolate_home = true
+codex_timeout_seconds = 600
+codex_progress_interval_seconds = 15
 ```
 
 Modes:
@@ -264,6 +266,8 @@ Critical behavior:
 - `tw` may be launched from any project folder.
 - Default content output is English. Russian or mixed-language input notes are
   translated/adapted into English draft text.
+- While Codex is running, `tw draft` prints progress to stderr. Large projects
+  can legitimately take several minutes while Codex reads context.
 - Source project context is summarized into the bundle.
 - Content generation runs from the draft folder, not from the source project.
 - `AGENTS.md`, `AGENTS.override.md`, and `.codex_home/AGENTS.md` in the draft

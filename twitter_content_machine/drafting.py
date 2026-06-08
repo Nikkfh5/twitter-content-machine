@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from .config import load_config
@@ -307,7 +308,14 @@ identity_strength: {identity_strength if identity_style_profile else ''}
         )
     else:
         must_have_llm = require_llm or selected_mode == "codex"
-        result = run_llm(selected_mode, bundle_paths.request, folder, config, require_llm=False)
+        result = run_llm(
+            selected_mode,
+            bundle_paths.request,
+            folder,
+            config,
+            require_llm=False,
+            progress_callback=_stderr_progress if selected_mode == "codex" else None,
+        )
         if result.attempted:
             (folder / "15_llm_raw_output.md").write_text(result.raw_output, encoding="utf-8")
         if result.ok:
@@ -340,6 +348,10 @@ identity_strength: {identity_strength if identity_style_profile else ''}
         if must_have_llm and not result.ok:
             raise RuntimeError(f"Codex generation failed: {result.message}")
     return DraftResult(draft_id, folder, final)
+
+
+def _stderr_progress(message: str) -> None:
+    print(f"tw: {message}", file=sys.stderr, flush=True)
 
 
 def get_draft(draft_id: str) -> dict[str, str]:

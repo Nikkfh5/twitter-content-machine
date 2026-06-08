@@ -3,8 +3,11 @@ from __future__ import annotations
 import shutil
 import subprocess
 import os
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from .config import Config
 from .llm_parsing import ParsedLLMOutput, parse_llm_output
@@ -82,7 +85,7 @@ def _help_text(command: list[str]) -> tuple[int, str]:
 def detect_codex_capabilities(command: str = "codex") -> CodexCapabilities:
     resolved = resolve_codex_command(command)
     if not resolved:
-        return CodexCapabilities(False, False, False, False)
+        return CodexCapabilities(False, False, False, False, False)
     top_code, top_help = _help_text([resolved, "--help"])
     exec_code, exec_help = _help_text([resolved, "exec", "--help"])
     combined = top_help + "\n" + exec_help
@@ -146,17 +149,24 @@ def run_llm(
     draft_folder: Path,
     config: Config,
     require_llm: bool = False,
+    progress_callback: Callable[[str], None] | None = None,
 ) -> LLMRunResult:
     if mode == "manual":
         parsed = parse_llm_output("")
         return LLMRunResult(False, False, "", parsed, "manual mode; no LLM attempted")
     if mode == "codex":
-        return _run_codex(request_path, draft_folder, config, require_llm)
+        return _run_codex(request_path, draft_folder, config, require_llm, progress_callback)
     parsed = parse_llm_output("")
     return LLMRunResult(False, False, "", parsed, f"unknown llm mode: {mode}")
 
 
-def _run_codex(request_path: Path, draft_folder: Path, config: Config, require_llm: bool) -> LLMRunResult:
+def _run_codex(
+    request_path: Path,
+    draft_folder: Path,
+    config: Config,
+    require_llm: bool,
+    progress_callback: Callable[[str], None] | None = None,
+) -> LLMRunResult:
     if not resolve_codex_command(config.llm_codex_command):
         parsed = parse_llm_output("")
         message = f"{config.llm_codex_command} not found"
@@ -172,24 +182,33 @@ def _run_codex(request_path: Path, draft_folder: Path, config: Config, require_l
         if require_llm:
             raise RuntimeError(message)
         return LLMRunResult(True, False, "", parsed, message)
+    _progress(
+        progress_callback,
+        f"codex started; timeout={config.llm_codex_timeout_seconds}s; request={request_path.name}; draft={draft_folder}",
+    )
+    started = time.monotonic()
     try:
-        completed = subprocess.run(
-            plan.command,
-            cwd=plan.cwd,
-            env=plan.env,
-            input=request_text,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            timeout=config.llm_codex_timeout_seconds,
-            check=False,
+        completed = _run_subprocess_with_progress(
+            plan,
+            request_text,
+            timeout_seconds=config.llm_codex_timeout_seconds,
+            interval_seconds=config.llm_codex_progress_interval_seconds,
+            progress_callback=progress_callback,
+            started=started,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         parsed = parse_llm_output("")
+        elapsed = int(time.monotonic() - started)
+        if isinstance(exc, subprocess.TimeoutExpired):
+            raw_output = _timeout_raw_output(exc)
+            message = f"codex timed out after {elapsed}s; increase [llm].codex_timeout_seconds if this project needs more context time"
+        else:
+            raw_output = ""
+            message = str(exc)
         if require_llm:
-            raise RuntimeError(str(exc)) from exc
-        return LLMRunResult(True, False, "", parsed, str(exc))
+            raise RuntimeError(message) from exc
+        return LLMRunResult(True, False, raw_output, parsed, message)
+    _progress(progress_callback, f"codex finished in {int(time.monotonic() - started)}s")
     raw = completed.stdout + ("\n\nSTDERR:\n" + completed.stderr if completed.stderr else "")
     if completed.returncode != 0:
         stderr = " ".join(completed.stderr.split()) if completed.stderr else ""
@@ -205,6 +224,64 @@ def _run_codex(request_path: Path, draft_folder: Path, config: Config, require_l
     if require_llm and not ok:
         raise RuntimeError(f"codex generation failed: {completed.returncode}; {parsed.error}")
     return LLMRunResult(True, ok, raw, parsed, "codex ok" if ok else f"codex failed: {parsed.error or completed.returncode}")
+
+
+def _run_subprocess_with_progress(
+    plan: CodexInvocationPlan,
+    request_text: str,
+    timeout_seconds: int,
+    interval_seconds: float,
+    progress_callback: Callable[[str], None] | None,
+    started: float,
+) -> subprocess.CompletedProcess[str]:
+    result: dict[str, subprocess.CompletedProcess[str] | BaseException] = {}
+
+    def target() -> None:
+        try:
+            result["value"] = subprocess.run(
+                plan.command,
+                cwd=plan.cwd,
+                env=plan.env,
+                input=request_text,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                timeout=timeout_seconds,
+                check=False,
+            )
+        except BaseException as exc:  # subprocess.run may raise from a worker thread.
+            result["value"] = exc
+
+    worker = threading.Thread(target=target, daemon=True)
+    worker.start()
+    interval = max(0.01, float(interval_seconds))
+    while worker.is_alive():
+        worker.join(interval)
+        if worker.is_alive():
+            elapsed = int(time.monotonic() - started)
+            _progress(progress_callback, f"codex still working; elapsed={elapsed}s; timeout={timeout_seconds}s")
+    value = result.get("value")
+    if isinstance(value, BaseException):
+        raise value
+    if value is None:
+        raise RuntimeError("codex subprocess ended without a result")
+    return value  # type: ignore[return-value]
+
+
+def _progress(progress_callback: Callable[[str], None] | None, message: str) -> None:
+    if progress_callback:
+        progress_callback(message)
+
+
+def _timeout_raw_output(exc: subprocess.TimeoutExpired) -> str:
+    stdout = exc.stdout or ""
+    stderr = exc.stderr or ""
+    if isinstance(stdout, bytes):
+        stdout = stdout.decode("utf-8", errors="replace")
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8", errors="replace")
+    return str(stdout) + ("\n\nSTDERR:\n" + str(stderr) if stderr else "")
 
 
 def mode_description(mode: str) -> str:

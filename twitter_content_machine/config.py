@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import tomllib
 from dataclasses import dataclass
+from typing import Any
 from pathlib import Path
 
 
@@ -24,7 +25,8 @@ max_source_chars = 20000
 codex_isolate_home = true
 codex_home_mode = "draft" # draft | default
 codex_command = "codex"
-codex_timeout_seconds = 180
+codex_timeout_seconds = 600
+codex_progress_interval_seconds = 15
 
 [x]
 provider = "none" # none | x_api | manual
@@ -55,6 +57,7 @@ class Config:
     llm_codex_home_mode: str
     llm_codex_command: str
     llm_codex_timeout_seconds: int
+    llm_codex_progress_interval_seconds: float
     context_cache_minutes: int
     x_provider: str
     x_username: str
@@ -99,7 +102,8 @@ def load_config(root: Path | None = None) -> Config:
         llm_codex_isolate_home=bool(llm.get("codex_isolate_home", True)),
         llm_codex_home_mode=str(llm.get("codex_home_mode", "draft")),
         llm_codex_command=str(llm.get("codex_command", "codex")),
-        llm_codex_timeout_seconds=int(llm.get("codex_timeout_seconds", 180)),
+        llm_codex_timeout_seconds=int(llm.get("codex_timeout_seconds", 600)),
+        llm_codex_progress_interval_seconds=_positive_float(llm.get("codex_progress_interval_seconds", 15), 15),
         context_cache_minutes=int(data.get("context_cache_minutes", 30)),
         x_provider=str(x.get("provider", "none")),
         x_username=str(x.get("username", os.environ.get("X_USERNAME", ""))),
@@ -116,3 +120,11 @@ def _normalize_default_language(value: str) -> str:
     if normalized == "ru":
         return "ru"
     return "en"
+
+
+def _positive_float(value: Any, default: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if number > 0 else default

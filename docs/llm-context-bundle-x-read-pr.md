@@ -20,6 +20,8 @@ The main correction:
 - default model: `gpt-5.5`
 - default reasoning effort: `xhigh`
 - default speed: `fast`
+- default Codex timeout: 600 seconds
+- progress messages while Codex is running
 
 These are config defaults and must stay overrideable.
 
@@ -85,6 +87,8 @@ Update after smart-default pass:
 - Normal `tw draft "<text>"` now uses Codex CLI through `[llm].mode = "auto"`.
 - Normal `tw draft "<text>"` writes English content by default, even when the
   raw idea is Russian or mixed-language.
+- Normal `tw draft "<text>"` prints Codex progress to stderr and allows long
+  large-project runs by default.
 - No OpenAI API path is exposed in the public draft command.
 - `--no-llm` and `--context-only` are explicit local fallback/debug modes.
 - Missing Codex or invalid Codex output makes the command fail after writing
@@ -98,7 +102,8 @@ X API support is read-only and testable by mocking HTTP. Missing credentials for
 ## Implemented In This Pass
 
 - Config defaults: `default_language = "en"`, `model = "gpt-5.5"`,
-  `reasoning_effort = "xhigh"`, `speed = "fast"`.
+  `reasoning_effort = "xhigh"`, `speed = "fast"`,
+  `codex_timeout_seconds = 600`.
 - Every draft creates context artifacts: `13_context_bundle.md`,
   `13_context_bundle.json`, `14_llm_request.md`, `16_llm_parse_report.md`,
   draft-local `AGENTS.md`, `AGENTS.override.md`, and `.codex_home/` support

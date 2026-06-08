@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import time
 from pathlib import Path
 import shutil
 import json
@@ -48,6 +49,7 @@ def test_ensure_creates_workspace_and_is_idempotent(tw_root: Path) -> None:
     assert config.llm_model == "gpt-5.5"
     assert config.llm_reasoning_effort == "xhigh"
     assert config.llm_speed == "fast"
+    assert config.llm_codex_timeout_seconds == 600
     assert config.x_provider == "none"
     assert config.x_readonly is True
 
@@ -256,6 +258,73 @@ def test_default_draft_requires_codex_when_no_llm_flag_is_absent(
     report = (folder / "16_llm_parse_report.md").read_text(encoding="utf-8")
     assert "ok: false" in report
     assert "not found" in report.lower()
+
+
+def test_draft_cli_prints_codex_progress_to_stderr(
+    tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = tmp_path / "progress-project"
+    project.mkdir()
+    ensure_workspace()
+    (tw_root / "config.toml").write_text(
+        """
+[llm]
+codex_timeout_seconds = 5
+codex_progress_interval_seconds = 0.01
+""",
+        encoding="utf-8",
+    )
+    payload = {
+        "variants": [
+            {
+                "id": "A",
+                "name": "direct_raw",
+                "text": "English draft.",
+                "intent": "dwell",
+                "why_it_might_work": "specific",
+                "risks": [],
+            }
+        ],
+        "critique": {
+            "real_point": "ok",
+            "too_generic": False,
+            "overclaim_risk": "low",
+            "financial_advice_risk": "low",
+            "confidentiality_risk": "low",
+            "repetition_risk": "low",
+            "identity_style_risk": "low",
+            "algorithm_fit": "ok",
+        },
+        "selected_variant_id": "A",
+        "final_candidate": "English draft.",
+        "media_suggestion": {"use_media": False, "type": "none", "reason": "none"},
+        "manual_notes": [],
+    }
+
+    class Completed:
+        returncode = 0
+        stdout = json.dumps(payload)
+        stderr = ""
+
+    monkeypatch.setattr("twitter_content_machine.llm.shutil.which", lambda command: "C:/bin/codex.exe")
+    monkeypatch.setattr(
+        "twitter_content_machine.llm.detect_codex_capabilities",
+        lambda command="codex": {"exec": True, "cd": True, "model": True, "config": True},
+    )
+
+    def fake_run(command, **kwargs):
+        time.sleep(0.05)
+        return Completed()
+
+    monkeypatch.setattr("twitter_content_machine.llm.subprocess.run", fake_run)
+
+    assert run_cli(["draft", "русская мысль"], cwd=project) == 0
+    captured = capsys.readouterr()
+
+    assert "English draft." in captured.out
+    assert "tw: codex started" in captured.err
+    assert "tw: codex still working" in captured.err
+    assert "tw: codex finished" in captured.err
 
 
 def test_no_llm_keeps_manual_fallback_and_runs_algorithm_review_by_default(
@@ -503,6 +572,78 @@ def test_codex_runner_sends_prompt_via_stdin_and_reports_nonzero_stderr(
     assert result.ok is False
     assert "codex failed before model output" in result.message
     assert result.parsed.error == "Codex exited with code 2"
+
+
+def test_codex_runner_reports_progress_while_waiting(
+    tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_workspace()
+    config_path = tw_root / "config.toml"
+    config_path.write_text(
+        """
+[llm]
+codex_timeout_seconds = 5
+codex_progress_interval_seconds = 0.01
+""",
+        encoding="utf-8",
+    )
+    payload = {
+        "variants": [
+            {
+                "id": "A",
+                "name": "direct_raw",
+                "text": "English draft.",
+                "intent": "dwell",
+                "why_it_might_work": "specific",
+                "risks": [],
+            }
+        ],
+        "critique": {
+            "real_point": "ok",
+            "too_generic": False,
+            "overclaim_risk": "low",
+            "financial_advice_risk": "low",
+            "confidentiality_risk": "low",
+            "repetition_risk": "low",
+            "identity_style_risk": "low",
+            "algorithm_fit": "ok",
+        },
+        "selected_variant_id": "A",
+        "final_candidate": "English draft.",
+        "media_suggestion": {"use_media": False, "type": "none", "reason": "none"},
+        "manual_notes": [],
+    }
+    request = tmp_path / "14_llm_request.md"
+    request.write_text('{"prompt": "slow enough for progress"}', encoding="utf-8")
+    draft_folder = tmp_path / "draft"
+    draft_folder.mkdir()
+    progress: list[str] = []
+
+    class Completed:
+        returncode = 0
+        stdout = json.dumps(payload)
+        stderr = ""
+
+    monkeypatch.setattr("twitter_content_machine.llm.shutil.which", lambda command: "C:/bin/codex.exe")
+    monkeypatch.setattr(
+        "twitter_content_machine.llm.detect_codex_capabilities",
+        lambda command="codex": {"exec": True, "cd": True, "model": True, "config": True},
+    )
+
+    def fake_run(command, **kwargs):
+        time.sleep(0.05)
+        return Completed()
+
+    monkeypatch.setattr("twitter_content_machine.llm.subprocess.run", fake_run)
+
+    from twitter_content_machine.llm import run_llm
+
+    result = run_llm("codex", request, draft_folder, load_config(tw_root), progress_callback=progress.append)
+
+    assert result.ok is True
+    assert any("codex started" in item for item in progress)
+    assert any("codex still working" in item for item in progress)
+    assert any("codex finished" in item for item in progress)
 
 
 def test_open_latest_resolves_existing_draft_without_gui(tw_root: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

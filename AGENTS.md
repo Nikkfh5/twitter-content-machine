@@ -120,6 +120,8 @@ Draft artifacts:
   `reasoning_effort = "xhigh"`, `speed = "fast"`, `default_language = "en"`.
   `tw draft` requires Codex
   CLI unless `--no-llm` or `--context-only` is used.
+- Default Codex timeout is 600 seconds. `tw draft` emits progress to stderr
+  while Codex is running so large-project context reads do not look frozen.
 - Active draft state lives at `~/twitter-system/state/current_draft.txt`.
   This is only a pointer to the current draft id; it is not content memory.
 - `tw edit` uses Codex CLI from the draft folder, writes
