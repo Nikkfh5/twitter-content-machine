@@ -10,6 +10,9 @@ project-advisor passes, larger refactors, or any new "what should we build next"
 discussion. More focused backlogs can still live in feature-specific docs, but
 they should link back here.
 
+Scored prioritization:
+- `docs/product-roadmap-scoring.md`
+
 ## Product Direction
 
 The tool should stop feeling like a pile of CLI flags and become a personal
@@ -57,6 +60,11 @@ Next work:
   - previous rejected draft
   - previous ready/posted text
   - unrelated memory match
+
+Progress:
+- 2026-06-08: implemented status-aware repeated-post risk. Captured ideas and
+  ordinary `draft` drafts no longer count as repeated-post risk; `ready`,
+  `posted`, and imported own posts still count.
 
 Why this is strong:
 - It stops useful iteration from being punished.

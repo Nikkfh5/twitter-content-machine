@@ -222,12 +222,11 @@ def _similar_memory(text: str, draft_id: str) -> tuple[bool, str]:
     rows: list[tuple[str, str, str]] = []
     with connect_db() as conn:
         rows.extend(
-            ("idea", row["id"], row["raw_text"] or "")
-            for row in conn.execute("select id, raw_text from ideas").fetchall()
-        )
-        rows.extend(
-            ("draft", row["id"], row["final_text"] or "")
-            for row in conn.execute("select id, final_text from drafts where id != ?", (draft_id,)).fetchall()
+            (f"{row['status']} draft", row["id"], row["final_text"] or "")
+            for row in conn.execute(
+                "select id, status, final_text from drafts where id != ?", (draft_id,)
+            ).fetchall()
+            if row["status"] in {"ready", "posted"}
         )
         rows.extend(
             ("post", row["id"], row["text"] or "")

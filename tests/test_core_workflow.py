@@ -15,7 +15,7 @@ from twitter_content_machine.cli import run_cli
 from twitter_content_machine.config import load_config
 from twitter_content_machine.codex_session import CodexSessionResult, run_codex_session
 from twitter_content_machine.db import connect_db, resolve_draft_id
-from twitter_content_machine.drafting import create_draft
+from twitter_content_machine.drafting import create_draft, set_draft_status
 from twitter_content_machine.llm import build_codex_invocation_plan, resolve_codex_command
 from twitter_content_machine.llm_parsing import parse_llm_output
 from twitter_content_machine.project_context import detect_project, refresh_project_context
@@ -1000,19 +1000,56 @@ def test_algo_aware_draft_runs_all_review_layers(tw_root: Path, tmp_path: Path) 
     assert (folder / "09_distribution_plan.md").exists()
 
 
-def test_algo_review_flags_repeated_ideas(tw_root: Path, tmp_path: Path) -> None:
+def test_algo_review_does_not_treat_captured_idea_as_repeated_post(
+    tw_root: Path, tmp_path: Path
+) -> None:
     project = tmp_path / "repeat-check"
     project.mkdir()
     ensure_workspace()
     text = "Backtesting realism improved only after I stopped trusting fake fills"
     assert run_cli(["idea", text], cwd=project) == 0
-    draft = create_draft(text, "short", project, no_llm=True)
+    draft = create_draft(text, "adaptive", project, no_llm=True)
 
     assert run_cli(["algo-review", draft.id], cwd=project) == 0
     review = (draft.folder / "07_algorithm_review.md").read_text(encoding="utf-8").lower()
 
-    assert "repeated idea risk" in review
-    assert "similar memory exists" in review
+    assert "repeated idea risk: low" in review
+    assert "similar memory exists" not in review
+
+
+def test_algo_review_does_not_treat_plain_draft_as_repeated_post(
+    tw_root: Path, tmp_path: Path
+) -> None:
+    project = tmp_path / "plain-draft-repeat"
+    project.mkdir()
+    ensure_workspace()
+    text = "Benchmark realism improved only after repeated checks exposed weak baselines"
+    create_draft(f"{text} in the first version", "adaptive", project, no_llm=True)
+    new_draft = create_draft(text, "adaptive", project, no_llm=True)
+
+    assert run_cli(["algo-review", new_draft.id], cwd=project) == 0
+    review = (new_draft.folder / "07_algorithm_review.md").read_text(encoding="utf-8").lower()
+
+    assert "repeated idea risk: low" in review
+    assert "plain draft" not in review
+
+
+def test_algo_review_flags_ready_or_posted_drafts_as_repeated(
+    tw_root: Path, tmp_path: Path
+) -> None:
+    project = tmp_path / "ready-repeat"
+    project.mkdir()
+    ensure_workspace()
+    text = "Benchmark realism improved only after repeated checks exposed weak baselines"
+    old_draft = create_draft(f"{text} in the first version", "adaptive", project, no_llm=True)
+    set_draft_status(old_draft.id, "ready")
+    new_draft = create_draft(text, "adaptive", project, no_llm=True)
+
+    assert run_cli(["algo-review", new_draft.id], cwd=project) == 0
+    review = (new_draft.folder / "07_algorithm_review.md").read_text(encoding="utf-8").lower()
+
+    assert "repeated idea risk: high" in review
+    assert "similar memory exists: ready draft" in review
 
 
 def test_algo_review_rejects_crypto_financial_advice_language(
