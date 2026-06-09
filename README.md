@@ -76,6 +76,7 @@ Top-level product roadmap:
 
 ```text
 docs/product-roadmap.md
+docs/product-roadmap-scoring.md
 ```
 
 ## Active Draft UX

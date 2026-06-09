@@ -165,6 +165,12 @@ Algorithm-aware review:
   low negative feedback risk, format/media fit, and stable account positioning.
 - Never recommend spam, fake controversy, financial advice, crypto shilling, or
   decorative media.
+- Repeated-post risk is status-aware: captured ideas and ordinary `draft`
+  drafts are working memory and should not count as repeated-post risk; `ready`,
+  `posted`, and imported/synced own posts do count.
+- Current roadmap priority after the repeated-post fix is the adaptive format
+  decision artifact: record why a draft should be single post, thread,
+  build-log, article-note, question, reply/quote, or media-supported post.
 - Stage 2 ideas are documented in `docs/algorithm-aware/ideas-and-backlog.md`;
   do not silently discard them when working on this feature later.
 
@@ -193,6 +199,10 @@ Telegram identity/style:
 Durable docs / resume:
 - Product roadmap:
   `docs/product-roadmap.md`
+- Product roadmap scoring:
+  `docs/product-roadmap-scoring.md`
+- Latest product roadmap progress:
+  `docs/superpowers/progress/2026-06-08-product-roadmap-progress.md`
 - Russian CLI guide: `docs/cli_descripsion_russion.md`
 - Style learning from future posts backlog:
   `docs/style-learning-from-posts-backlog.md`
