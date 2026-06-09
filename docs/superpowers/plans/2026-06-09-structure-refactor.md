@@ -207,7 +207,7 @@ git commit -m "refactor: split algorithm review internals"
 - [x] **Step 6: Run `tests/test_identity_style.py`**
 - [x] **Step 7: Move artifact rendering**
 - [x] **Step 8: Run full tests**
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 Commit:
 
@@ -244,12 +244,12 @@ git commit -m "refactor: split cli command handlers"
 - Modify: `twitter_content_machine/drafting.py`
 - Test: `tests/test_drafting_workflow.py`, `tests/test_active_draft_cli.py`
 
-- [ ] **Step 1: Move fallback variant generation**
-- [ ] **Step 2: Run drafting tests**
-- [ ] **Step 3: Move draft artifact file-writing helpers**
-- [ ] **Step 4: Run drafting tests**
-- [ ] **Step 5: Move status changes**
-- [ ] **Step 6: Run full tests**
+- [x] **Step 1: Move fallback variant generation**
+- [x] **Step 2: Run drafting tests**
+- [x] **Step 3: Move draft artifact file-writing helpers**
+- [x] **Step 4: Run drafting tests**
+- [x] **Step 5: Move status changes**
+- [x] **Step 6: Run full tests**
 - [ ] **Step 7: Commit**
 
 Commit:
