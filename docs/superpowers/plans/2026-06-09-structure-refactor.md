@@ -223,11 +223,14 @@ git commit -m "refactor: split identity style internals"
 - Modify: `twitter_content_machine/cli.py`
 - Test: all CLI test files
 
-- [ ] **Step 1: Extract command handlers by group, keep parser in `cli.py`**
-- [ ] **Step 2: Run CLI-focused tests**
-- [ ] **Step 3: Extract parser construction if still needed**
-- [ ] **Step 4: Run full tests**
-- [ ] **Step 5: Commit**
+- [x] **Step 1: Extract command handlers by group, keep parser in `cli.py`**
+- [x] **Step 2: Run CLI-focused tests**
+- [x] **Step 3: Extract parser construction if still needed**
+- [x] **Step 4: Run full tests**
+- [x] **Step 5: Commit**
+
+Note: parser construction stayed in `cli.py` intentionally. The oversized part
+was command handler implementation, now under `twitter_content_machine/commands/`.
 
 Commit:
 
@@ -250,7 +253,7 @@ git commit -m "refactor: split cli command handlers"
 - [x] **Step 4: Run drafting tests**
 - [x] **Step 5: Move status changes**
 - [x] **Step 6: Run full tests**
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Commit:
 

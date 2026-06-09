@@ -18,6 +18,9 @@ Architecture:
 - CLI entrypoint: `tw`
 - Python package: `twitter_content_machine`
 - Console script target: `twitter_content_machine.cli:main`
+- CLI parser/entrypoint: `twitter_content_machine/cli.py`
+- CLI command handlers: `twitter_content_machine/commands/`, re-exported through
+  `twitter_content_machine/cli_commands.py` for compatibility.
 - Central workspace: `~/twitter-system` or `TWITTER_SYSTEM_ROOT`
 - Storage: SQLite + FTS5
 - MCP server: `tw mcp serve`, local-memory tools only
