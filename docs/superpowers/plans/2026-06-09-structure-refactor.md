@@ -175,12 +175,12 @@ git commit -m "refactor: split core workflow tests"
 - Modify: `twitter_content_machine/algorithm_review.py`
 - Test: `tests/test_algorithm_review.py`
 
-- [ ] **Step 1: Move constants only**
-- [ ] **Step 2: Run `tests/test_algorithm_review.py`**
-- [ ] **Step 3: Move scoring/facts only**
-- [ ] **Step 4: Run `tests/test_algorithm_review.py`**
-- [ ] **Step 5: Move artifact rendering only**
-- [ ] **Step 6: Run full tests**
+- [x] **Step 1: Move constants only**
+- [x] **Step 2: Run `tests/test_algorithm_review.py`**
+- [x] **Step 3: Move scoring/facts only**
+- [x] **Step 4: Run `tests/test_algorithm_review.py`**
+- [x] **Step 5: Move artifact rendering only**
+- [x] **Step 6: Run full tests**
 - [ ] **Step 7: Commit**
 
 Commit:
