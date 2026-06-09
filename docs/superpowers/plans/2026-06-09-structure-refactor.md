@@ -181,7 +181,7 @@ git commit -m "refactor: split core workflow tests"
 - [x] **Step 4: Run `tests/test_algorithm_review.py`**
 - [x] **Step 5: Move artifact rendering only**
 - [x] **Step 6: Run full tests**
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Commit:
 
@@ -199,14 +199,14 @@ git commit -m "refactor: split algorithm review internals"
 - Modify: `twitter_content_machine/identity_style.py`
 - Test: `tests/test_identity_style.py`
 
-- [ ] **Step 1: Move profile/context loading**
-- [ ] **Step 2: Run `tests/test_identity_style.py`**
-- [ ] **Step 3: Move auto-selection**
-- [ ] **Step 4: Run `tests/test_identity_style.py`**
-- [ ] **Step 5: Move style learning**
-- [ ] **Step 6: Run `tests/test_identity_style.py`**
-- [ ] **Step 7: Move artifact rendering**
-- [ ] **Step 8: Run full tests**
+- [x] **Step 1: Move profile/context loading**
+- [x] **Step 2: Run `tests/test_identity_style.py`**
+- [x] **Step 3: Move auto-selection**
+- [x] **Step 4: Run `tests/test_identity_style.py`**
+- [x] **Step 5: Move style learning**
+- [x] **Step 6: Run `tests/test_identity_style.py`**
+- [x] **Step 7: Move artifact rendering**
+- [x] **Step 8: Run full tests**
 - [ ] **Step 9: Commit**
 
 Commit:
