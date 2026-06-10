@@ -49,10 +49,11 @@ from .cli_commands import (
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tw", description="Local draft-only X/Twitter content machine")
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command", required=False)
 
     sub.add_parser("init").set_defaults(func=_cmd_init)
     sub.add_parser("ensure").set_defaults(func=_cmd_ensure)
+    sub.add_parser("work").set_defaults(func=_cmd_work)
 
     idea = sub.add_parser("idea")
     idea.add_argument("text")
@@ -258,10 +259,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def run_cli(argv: list[str] | None = None, cwd: Path | None = None) -> int:
     parser = build_parser()
+    argv = _normalize_argv(parser, argv)
     args = parser.parse_args(argv)
+    if args.command is None:
+        return _cmd_work(args, cwd)
     func = args.func
     try:
-        if args.command in {"idea", "capture", "draft", "refresh-context", "search", "codex"}:
+        if args.command in {"idea", "capture", "draft", "refresh-context", "search", "codex", "work"}:
             return int(func(args, cwd))
         return int(func(args))
     except Exception as exc:
@@ -269,8 +273,33 @@ def run_cli(argv: list[str] | None = None, cwd: Path | None = None) -> int:
         return 1
 
 
+def _cmd_work(args: argparse.Namespace, cwd: Path | None = None) -> int:
+    from .workspace_tui import run_workspace_app
+
+    return run_workspace_app(cwd)
+
+
 def main() -> None:
     raise SystemExit(run_cli())
+
+
+def _normalize_argv(parser: argparse.ArgumentParser, argv: list[str] | None) -> list[str] | None:
+    raw = sys.argv[1:] if argv is None else list(argv)
+    if not raw or raw[0].startswith("-"):
+        return raw
+    commands = _command_names(parser)
+    if raw[0] in commands:
+        return raw
+    if len(raw) > 1 or " " in raw[0]:
+        return ["draft", *raw]
+    return raw
+
+
+def _command_names(parser: argparse.ArgumentParser) -> set[str]:
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            return set(action.choices)
+    return set()
 
 
 if __name__ == "__main__":

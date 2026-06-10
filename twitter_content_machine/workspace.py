@@ -132,6 +132,7 @@ WORKSPACE_DIRS = [
     "sources/telegram",
     "sources/notes",
     "searches",
+    "sessions",
     "codex_sessions",
     "db",
     "logs",

@@ -9,7 +9,7 @@ description = "Local terminal-first, draft-only X/Twitter content machine"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Nikita" }]
-dependencies = []
+dependencies = ["textual>=0.86"]
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.0"]
