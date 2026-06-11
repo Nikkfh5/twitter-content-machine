@@ -120,3 +120,32 @@ def test_path_and_runs_commands_show_session_state(tw_root: Path, tmp_path: Path
 
     assert str(tw_root / "sessions") in path_result.message
     assert "draft_generation" in runs_result.message
+
+
+def test_workspace_screen_prioritizes_author_state_not_raw_event_log(
+    tw_root: Path, tmp_path: Path, monkeypatch
+) -> None:
+    def fake_create_draft(**kwargs):
+        draft_folder = tw_root / "drafts" / "2026" / "06" / "draft_fake"
+        draft_folder.mkdir(parents=True)
+        for name in ["FORMAT_DECISION.md", "13_context_bundle.md", "13_context_bundle.json", "14_llm_request.md"]:
+            (draft_folder / name).write_text(name, encoding="utf-8")
+        (draft_folder / "06_final_candidate.md").write_text("fallback draft", encoding="utf-8")
+        return type("Draft", (), {"id": "draft_fake", "folder": draft_folder, "final_text": "fallback draft"})()
+
+    monkeypatch.setattr("twitter_content_machine.workspace_service.create_draft", fake_create_draft)
+    service = ContentWorkspaceService(cwd=tmp_path)
+    service.handle("/draft raw thought")
+    service.handle("/continue")
+
+    screen = service.render_summary()
+
+    assert "Next action" in screen
+    assert "/continue --run" in screen
+    assert "Draft preview" in screen
+    assert "fallback draft" in screen
+    assert "Progress" in screen
+    assert "Recent activity" in screen
+    assert "interface_summary.json is missing" not in screen
+    assert "step_started" not in screen
+    assert "create_draft started" not in screen
