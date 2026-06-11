@@ -163,6 +163,38 @@ def test_empty_workspace_screen_has_single_start_action(tw_root: Path, tmp_path:
     assert "events.jsonl" not in screen
 
 
+def test_empty_workspace_invites_plain_author_intent(tw_root: Path, tmp_path: Path) -> None:
+    service = ContentWorkspaceService(cwd=tmp_path)
+
+    screen = service.render_summary()
+
+    assert "Write the raw idea first" in screen
+    assert "/draft <idea>" in screen
+    assert "No active draft yet." in screen
+
+
+def test_plain_text_starts_draft_when_no_session_exists(tw_root: Path, tmp_path: Path) -> None:
+    service = ContentWorkspaceService(cwd=tmp_path)
+
+    result = service.handle("rough note about validation")
+
+    assert result.ok is True
+    assert result.run is not None
+    assert result.run.input_text == "rough note about validation"
+
+
+def test_workspace_screen_does_not_suggest_codex_before_local_steps_finish(
+    tw_root: Path, tmp_path: Path
+) -> None:
+    service = ContentWorkspaceService(cwd=tmp_path)
+    service.handle("rough note about validation")
+
+    screen = service.render_summary()
+
+    assert "Next action: /continue - finish create draft files" in screen
+    assert "Run /continue --run" not in screen
+
+
 def test_workspace_screen_shows_final_summary_after_codex(
     tw_root: Path, tmp_path: Path, monkeypatch
 ) -> None:

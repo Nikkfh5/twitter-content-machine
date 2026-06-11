@@ -56,7 +56,9 @@ class ContentWorkspaceService:
         if not command:
             return self.status()
         if not command.startswith("/"):
-            return WorkspaceCommandResult(False, "Команды MVP начинаются с slash. Попробуй: /draft <текст>", self.session)
+            if self.session is None:
+                return self.draft(command)
+            return WorkspaceCommandResult(False, "Commands for an active draft still need slash syntax. Try: /continue or /help", self.session)
         parts = shlex.split(command)
         name = parts[0].lower()
         args = parts[1:]

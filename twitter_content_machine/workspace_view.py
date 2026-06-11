@@ -29,7 +29,9 @@ def render_empty_workspace_screen(root: Path) -> str:
             "Draft preview",
             "No active draft yet.",
             "",
-            "Start with one raw thought. The workspace will create a resumable session and stop before any long Codex run.",
+            "Write the raw idea first. It can be rough, mixed-language, or just a note.",
+            "Command: /draft <idea>",
+            "The workspace will create a resumable session and stop before any long Codex run.",
             "",
             f"Workspace: {root}",
         ]
@@ -128,6 +130,9 @@ def _problem_lines(run: WorkspaceRun, loaded: LoadedInterfaceSummary) -> list[st
         return loaded.data.problems[:4]
     if loaded.warnings and _codex_finished(run):
         return loaded.warnings[:3]
+    step = next_unfinished_step(run, allow_codex=True)
+    if step is not None and step.id != "run_codex":
+        return ["No Codex critique yet.", "Run /continue to prepare context before the model step."]
     return ["No Codex critique yet.", "Run /continue --run when ready for the model step."]
 
 
