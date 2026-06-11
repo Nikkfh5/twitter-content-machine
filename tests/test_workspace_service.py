@@ -149,3 +149,58 @@ def test_workspace_screen_prioritizes_author_state_not_raw_event_log(
     assert "interface_summary.json is missing" not in screen
     assert "step_started" not in screen
     assert "create_draft started" not in screen
+
+
+def test_empty_workspace_screen_has_single_start_action(tw_root: Path, tmp_path: Path) -> None:
+    service = ContentWorkspaceService(cwd=tmp_path)
+
+    screen = service.render_summary()
+
+    assert "Status: empty" in screen
+    assert "Next action: /draft <idea>" in screen
+    assert "No active draft yet." in screen
+    assert "step_started" not in screen
+    assert "events.jsonl" not in screen
+
+
+def test_workspace_screen_shows_final_summary_after_codex(
+    tw_root: Path, tmp_path: Path, monkeypatch
+) -> None:
+    def fake_create_draft(**kwargs):
+        draft_folder = tw_root / "drafts" / "2026" / "06" / "draft_fake"
+        draft_folder.mkdir(parents=True)
+        for name in ["FORMAT_DECISION.md", "13_context_bundle.md", "13_context_bundle.json", "14_llm_request.md"]:
+            (draft_folder / name).write_text(name, encoding="utf-8")
+        (draft_folder / "06_final_candidate.md").write_text("fallback draft", encoding="utf-8")
+        return type("Draft", (), {"id": "draft_fake", "folder": draft_folder, "final_text": "fallback draft"})()
+
+    class Parsed:
+        ok = True
+        error = ""
+        data = {
+            "variants": [{"id": "A", "name": "direct", "text": "Final draft.", "intent": "dwell", "why_it_might_work": "specific", "risks": []}],
+            "critique": {"real_point": "specific", "too_generic": False},
+            "selected_variant_id": "A",
+            "final_candidate": "Final draft.",
+        }
+
+    class Result:
+        attempted = True
+        ok = True
+        raw_output = '{"final_candidate":"Final draft."}'
+        parsed = Parsed()
+        message = "codex ok"
+
+    monkeypatch.setattr("twitter_content_machine.workspace_service.create_draft", fake_create_draft)
+    monkeypatch.setattr("twitter_content_machine.workspace_service.run_llm", lambda *args, **kwargs: Result())
+    service = ContentWorkspaceService(cwd=tmp_path)
+    service.handle("/draft raw thought")
+    service.handle("/continue")
+    service.handle("/continue --run")
+
+    screen = service.render_summary()
+
+    assert "Final draft." in screen
+    assert "MVP не публикует" in screen or "draft_only" in screen
+    assert "[x] run Codex" in screen
+    assert "step_finished" not in screen
