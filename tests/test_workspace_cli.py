@@ -29,3 +29,9 @@ def test_work_command_opens_workspace_entrypoint(tw_root: Path, tmp_path: Path, 
 
     assert run_cli(["work"], cwd=tmp_path) == 0
     assert calls == [tmp_path]
+
+
+def test_workspace_tui_wrapper_exports_run_workspace_app() -> None:
+    from twitter_content_machine.workspace_tui import run_workspace_app
+
+    assert callable(run_workspace_app)
