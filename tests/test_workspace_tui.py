@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from twitter_content_machine.workspace_tui import _split_screen
+from twitter_content_machine.workspace_tui_sections import split_screen
 
 
 def test_split_screen_returns_keys_used_by_tui_refresh() -> None:
-    sections = _split_screen(
+    sections = split_screen(
         """Content Workspace
 
 Status: active/needs_user
