@@ -82,6 +82,50 @@ def test_plain_draft_defaults_to_adaptive_format(
     assert "Do not make the post artificially short" in request
     assert "2-5 short paragraphs" in request
 
+def test_adaptive_draft_writes_format_decision_artifact(
+    tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tmp_path / "format-decision"
+    project.mkdir()
+    ensure_workspace()
+    monkeypatch.setattr("twitter_content_machine.llm.resolve_codex_command", lambda command: None)
+
+    assert run_cli(["draft", "--no-llm", "I fixed a validation bug and need a build log about what broke"], cwd=project) == 0
+
+    draft_id = resolve_draft_id("latest")
+    with connect_db() as conn:
+        row = conn.execute("select folder_path from drafts where id = ?", (draft_id,)).fetchone()
+    folder = Path(row["folder_path"])
+    decision = (folder / "FORMAT_DECISION.md").read_text(encoding="utf-8")
+    request = (folder / "14_llm_request.md").read_text(encoding="utf-8")
+    bundle = json.loads((folder / "13_context_bundle.json").read_text(encoding="utf-8"))
+
+    assert "best_format: build-log" in decision
+    assert "decision_source: adaptive-heuristic" in decision
+    assert "FORMAT_DECISION.md" in request
+    assert "best_format: build-log" in request
+    assert bundle["format_decision"]["best_format"] == "build-log"
+
+def test_explicit_short_format_records_user_override(
+    tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tmp_path / "format-override"
+    project.mkdir()
+    ensure_workspace()
+    monkeypatch.setattr("twitter_content_machine.llm.resolve_codex_command", lambda command: None)
+
+    assert run_cli(["draft", "--no-llm", "--short", "small note"], cwd=project) == 0
+
+    draft_id = resolve_draft_id("latest")
+    with connect_db() as conn:
+        row = conn.execute("select folder_path from drafts where id = ?", (draft_id,)).fetchone()
+    folder = Path(row["folder_path"])
+    decision = (folder / "FORMAT_DECISION.md").read_text(encoding="utf-8")
+
+    assert "requested_format: short" in decision
+    assert "best_format: short" in decision
+    assert "decision_source: explicit-user-format" in decision
+
 def test_short_flag_keeps_explicit_short_format(
     tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

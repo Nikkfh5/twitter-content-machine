@@ -26,6 +26,20 @@ Weights:
 | 6 | Read-only X enrichment for outcomes | 68 | Normal | Useful, but API access and endpoint limits may block automation. Should come after manual outcome model. |
 | 7 | RAG/indexed detector | 62 | Interesting but early | Could help compare drafts against known safe/risky examples, but it is overkill until we have evidence schema and labeled cases. |
 
+## Implementation Status
+
+Updated: 2026-06-09.
+
+| Rank | Idea | Status | Evidence |
+|---:|---|---|---|
+| 1 | Repeated-idea lineage/status-aware review | Completed / verified | Existing tests cover captured ideas, plain drafts, and ready/posted repeated exposure. |
+| 2 | Adaptive format decision artifact | Completed MVP | `FORMAT_DECISION.md` is written per draft and included in context bundle / LLM request. |
+| 3 | `tw` as personal scribe / natural dictation entry | Completed MVP | Bare `tw "<dictation>"` normalizes to `tw draft "<dictation>"`. |
+| 4 | Evidence-based risk detector | Next major quality item | Not part of the 1/2/3/5 implementation pass. |
+| 5 | Manual high-value interaction analytics | Completed MVP | `tw outcome`, `tw outcomes`, `accounts`, `high_value_interactions`, and `20_high_value_interactions.md`. |
+| 6 | Read-only X enrichment for outcomes | Deferred | Depends on API/provider availability after manual outcome model proves useful. |
+| 7 | RAG/indexed detector | Deferred | Wait for evidence schema and labeled detector cases. |
+
 ## Notes On RAG / Indexed Detector
 
 Verdict: normal-to-interesting, not first.
@@ -50,11 +64,11 @@ Best path:
 
 ## Implementation Order
 
-1. Fix repeated-idea lineage/status-aware review.
-2. Add explicit format decision artifact.
-3. Improve personal-scribe UX around `tw "<dictation>"`.
-4. Replace risk detector with evidence-based detector.
-5. Add manual high-value interaction tracking.
+1. Fix repeated-idea lineage/status-aware review. Done.
+2. Add explicit format decision artifact. Done MVP.
+3. Improve personal-scribe UX around `tw "<dictation>"`. Done MVP.
+4. Add manual high-value interaction tracking. Done MVP.
+5. Replace risk detector with evidence-based detector. Next.
 6. Add read-only X outcome enrichment if API allows.
 7. Add indexed/RAG risk memory after enough labeled detector cases exist.
 

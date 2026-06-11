@@ -140,12 +140,130 @@ SCHEMA = [
       imported_at text
     )
     """,
+    """
+    create table if not exists accounts(
+      handle text primary key,
+      display_name text,
+      cluster text,
+      why_important text,
+      first_seen text,
+      last_interaction text,
+      notes text
+    )
+    """,
+    """
+    create table if not exists high_value_interactions(
+      id text primary key,
+      created_at text,
+      draft_id text,
+      post_id text,
+      handle text,
+      action text,
+      why_important text,
+      audience_cluster text,
+      relationship text,
+      quality_note text,
+      follow_up_needed integer
+    )
+    """,
+    """
+    create table if not exists target_accounts(
+      id text primary key,
+      handle text,
+      display_name text,
+      user_id text,
+      cluster text,
+      source text,
+      url text,
+      followers_count integer,
+      following_count integer,
+      verified integer,
+      description text,
+      language text,
+      relevance_score real,
+      social_fit_score real,
+      noise_score real,
+      status text,
+      notes text,
+      created_at text,
+      updated_at text
+    )
+    """,
+    """
+    create table if not exists follow_queue(
+      id text primary key,
+      account_id text,
+      handle text,
+      cluster text,
+      reason text,
+      priority integer,
+      status text,
+      suggested_at text,
+      acted_at text
+    )
+    """,
+    """
+    create table if not exists digests(
+      id text primary key,
+      created_at text,
+      cluster text,
+      source text,
+      language text,
+      raw_count integer,
+      summary text,
+      opportunities text,
+      folder_path text
+    )
+    """,
+    """
+    create table if not exists digest_items(
+      id text primary key,
+      digest_id text,
+      source_account_id text,
+      handle text,
+      post_id text,
+      url text,
+      created_at text,
+      text text,
+      public_metrics text,
+      cluster text,
+      relevance_score real,
+      actionability_score real,
+      suggested_action text
+    )
+    """,
+    """
+    create table if not exists bootstrap_plans(
+      id text primary key,
+      created_at text,
+      days integer,
+      stage text,
+      interaction_mode text,
+      folder_path text,
+      status text
+    )
+    """,
+    """
+    create table if not exists bootstrap_actions(
+      id text primary key,
+      plan_id text,
+      day integer,
+      action_type text,
+      title text,
+      details text,
+      status text,
+      created_at text,
+      updated_at text
+    )
+    """,
     "create virtual table if not exists ideas_fts using fts5(id, raw_text, tags)",
     "create virtual table if not exists drafts_fts using fts5(id, title, final_text, tags)",
     "create virtual table if not exists posts_fts using fts5(id, text, tags)",
     "create virtual table if not exists sources_fts using fts5(id, title, summary, raw_text, tags)",
     "create virtual table if not exists telegram_messages_fts using fts5(id, profile_name, text_clean, labels)",
     "create virtual table if not exists processed_style_examples_fts using fts5(id, profile_name, text, label)",
+    "create virtual table if not exists target_accounts_fts using fts5(id, handle, display_name, description, notes)",
+    "create virtual table if not exists digest_items_fts using fts5(id, text, handle, cluster)",
 ]
 
 

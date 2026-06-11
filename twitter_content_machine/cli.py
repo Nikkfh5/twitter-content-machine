@@ -11,21 +11,30 @@ from .cli_commands import (
     _cmd_analyze_own,
     _cmd_analyze_peer,
     _cmd_article,
+    _cmd_bootstrap_plan,
     _cmd_capture,
     _cmd_codex,
     _cmd_distribution_plan,
+    _cmd_draft_from_digest,
     _cmd_doctor,
     _cmd_draft,
     _cmd_drafts,
     _cmd_edit,
     _cmd_ensure,
+    _cmd_follow_seed,
+    _cmd_graph_scan,
+    _cmd_graph_review,
     _cmd_idea,
     _cmd_init,
+    _cmd_log_action,
     _cmd_mark,
     _cmd_mcp,
     _cmd_media_plan,
     _cmd_open,
+    _cmd_outcome,
+    _cmd_outcomes,
     _cmd_path,
+    _cmd_quote_candidates,
     _cmd_queue,
     _cmd_refine,
     _cmd_refresh_context,
@@ -40,8 +49,12 @@ from .cli_commands import (
     _cmd_style_review,
     _cmd_style_stats,
     _cmd_sync_posted,
+    _cmd_target_accounts,
     _cmd_tg_import,
+    _cmd_today,
     _cmd_use,
+    _cmd_weekly_review,
+    _cmd_x_digest,
     _cmd_x_read,
     list_drafts,
     save_idea,
@@ -54,6 +67,80 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("init").set_defaults(func=_cmd_init)
     sub.add_parser("ensure").set_defaults(func=_cmd_ensure)
     sub.add_parser("work").set_defaults(func=_cmd_work)
+
+    bootstrap_plan = sub.add_parser("bootstrap-plan")
+    bootstrap_plan.add_argument("--days", type=int, default=None)
+    bootstrap_plan.set_defaults(func=_cmd_bootstrap_plan)
+
+    bootstrap_alias = sub.add_parser("bootstrap")
+    bootstrap_alias.add_argument("--days", type=int, default=None)
+    bootstrap_alias.set_defaults(func=_cmd_bootstrap_plan)
+
+    today = sub.add_parser("today")
+    today.add_argument("--refresh", action="store_true")
+    today.add_argument("--live-x", action="store_true", dest="live_x")
+    today.set_defaults(func=_cmd_today)
+
+    log_action = sub.add_parser("log-action")
+    log_action.add_argument("action_id")
+    status_group = log_action.add_mutually_exclusive_group(required=True)
+    status_group.add_argument("--done", action="store_true")
+    status_group.add_argument("--skip", action="store_true")
+    log_action.add_argument("--note", default="")
+    log_action.set_defaults(func=_cmd_log_action)
+
+    follow_seed = sub.add_parser("follow-seed")
+    follow_seed.add_argument("--cluster", required=True)
+    follow_seed.add_argument("--limit", type=int, default=30)
+    follow_seed.set_defaults(func=_cmd_follow_seed)
+
+    graph_scan = sub.add_parser("graph-scan")
+    graph_scan.add_argument("--cluster", required=True)
+    graph_scan.add_argument("--limit", type=int, default=30)
+    graph_scan.add_argument("--posts", type=int, default=50)
+    graph_scan.add_argument("--no-seed-following", action="store_true")
+    graph_scan.set_defaults(func=_cmd_graph_scan)
+
+    target_accounts = sub.add_parser("target-accounts")
+    target_sub = target_accounts.add_subparsers(dest="target_accounts_command", required=True)
+    target_add = target_sub.add_parser("add")
+    target_add.add_argument("handle")
+    target_add.add_argument("--cluster", required=True)
+    target_add.add_argument("--note", default="")
+    target_add.set_defaults(func=_cmd_target_accounts)
+    target_import = target_sub.add_parser("import")
+    target_import.add_argument("path")
+    target_import.add_argument("--cluster")
+    target_import.set_defaults(func=_cmd_target_accounts)
+    target_list = target_sub.add_parser("list")
+    target_list.add_argument("--cluster")
+    target_list.set_defaults(func=_cmd_target_accounts)
+    target_score = target_sub.add_parser("score")
+    target_score.add_argument("--cluster")
+    target_score.set_defaults(func=_cmd_target_accounts)
+
+    x_digest = sub.add_parser("x-digest")
+    x_digest.add_argument("--cluster", required=True)
+    x_digest.add_argument("--limit", type=int, default=50)
+    lang_group = x_digest.add_mutually_exclusive_group()
+    lang_group.add_argument("--ru", action="store_true")
+    lang_group.add_argument("--en", action="store_true")
+    x_digest.set_defaults(func=_cmd_x_digest)
+
+    draft_from_digest = sub.add_parser("draft-from-digest")
+    draft_from_digest.add_argument("target", nargs="?", default="latest")
+    digest_kind = draft_from_digest.add_mutually_exclusive_group()
+    digest_kind.add_argument("--short", action="store_true")
+    digest_kind.add_argument("--thread", action="store_true")
+    draft_from_digest.add_argument("--no-llm", action="store_true")
+    draft_from_digest.set_defaults(func=_cmd_draft_from_digest)
+
+    quote_candidates = sub.add_parser("quote-candidates")
+    quote_candidates.add_argument("target", nargs="?", default="latest")
+    quote_candidates.set_defaults(func=_cmd_quote_candidates)
+
+    sub.add_parser("graph-review").set_defaults(func=_cmd_graph_review)
+    sub.add_parser("weekly-review").set_defaults(func=_cmd_weekly_review)
 
     idea = sub.add_parser("idea")
     idea.add_argument("text")
@@ -207,6 +294,23 @@ def build_parser() -> argparse.ArgumentParser:
     open_cmd.add_argument("--print-path", action="store_true")
     open_cmd.set_defaults(func=_cmd_open)
 
+    outcome = sub.add_parser("outcome")
+    outcome.add_argument("draft_id", nargs="?")
+    outcome.add_argument("--handle", required=True)
+    outcome.add_argument("--action", required=True, choices=["follow", "reply", "repost", "quote", "profile_click"])
+    outcome.add_argument("--why", required=True)
+    outcome.add_argument("--cluster")
+    outcome.add_argument("--relationship")
+    outcome.add_argument("--quality-note")
+    outcome.add_argument("--follow-up", action="store_true")
+    outcome.set_defaults(func=_cmd_outcome)
+
+    outcomes = sub.add_parser("outcomes")
+    outcomes.add_argument("draft_id", nargs="?")
+    outcomes.add_argument("--all", action="store_true")
+    outcomes.add_argument("--limit", type=int, default=20)
+    outcomes.set_defaults(func=_cmd_outcomes)
+
     mark_ready = sub.add_parser("mark-ready")
     mark_ready.add_argument("draft_id", nargs="?")
     mark_ready.set_defaults(func=lambda args: _cmd_mark(args, "ready"))
@@ -265,7 +369,7 @@ def run_cli(argv: list[str] | None = None, cwd: Path | None = None) -> int:
         return _cmd_work(args, cwd)
     func = args.func
     try:
-        if args.command in {"idea", "capture", "draft", "refresh-context", "search", "codex", "work"}:
+        if args.command in {"idea", "capture", "draft", "refresh-context", "search", "codex", "work", "draft-from-digest"}:
             return int(func(args, cwd))
         return int(func(args))
     except Exception as exc:

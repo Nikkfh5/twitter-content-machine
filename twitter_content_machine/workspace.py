@@ -115,6 +115,89 @@ decision_rule:
   revise: "total 16-21 or fixable medium risk"
   reject: "total < 16 or high safety risk"
 """,
+    "graph_bootstrap_agent.md": """# Graph Bootstrap Agent
+
+Mission:
+Build the first relevant social graph for a cold X account without spam, mass automation, or heavy social interaction.
+
+The agent optimizes for:
+- high-quality follows
+- clear topic clusters
+- useful digests
+- standalone/quote-note opportunities
+- profile conversion
+- long-term trust
+
+The agent does not optimize for:
+- generic virality
+- aggressive follow/unfollow
+- mass replies
+- automated likes
+- bot-like activity
+- financial advice
+- crypto shilling
+
+Default mode:
+low_social cold_start
+
+Human actions required:
+- manually follow selected accounts
+- manually publish posts
+- manually choose quote notes
+""",
+}
+
+PROFILE_CLUSTER_FILES = {
+    "quant.md": """# quant
+
+Target:
+- market microstructure
+- backtesting realism
+- execution assumptions
+- quant dev
+- HFT/systematic trading
+
+Avoid:
+- trading signals
+- alpha promises
+- crypto shilling
+- guru PnL tone
+""",
+    "systems.md": """# systems
+
+Target:
+- C++
+- systems design
+- low latency
+- infrastructure
+- performance debugging
+""",
+    "ml_infra.md": """# ml_infra
+
+Target:
+- recommender systems
+- feature stores
+- data pipelines
+- model serving
+- ML systems
+""",
+    "ai_agents.md": """# ai_agents
+
+Target:
+- Codex
+- developer tooling
+- local agents
+- MCP
+- content/workflow automation
+""",
+    "builders.md": """# builders
+
+Target:
+- technical public notebooks
+- students building projects
+- small tools
+- honest progress logs
+""",
 }
 
 WORKSPACE_DIRS = [
@@ -135,6 +218,12 @@ WORKSPACE_DIRS = [
     "sessions",
     "codex_sessions",
     "db",
+    "graph/target_accounts",
+    "graph/follow_queue",
+    "graph/digests",
+    "graph/plans",
+    "graph/scans",
+    "graph/reports",
     "logs",
 ]
 
@@ -148,6 +237,12 @@ def ensure_workspace(root: Path | None = None) -> Workspace:
         config_path.write_text(DEFAULT_CONFIG, encoding="utf-8")
     for name, content in PROFILE_FILES.items():
         path = root / "profile" / name
+        if not path.exists():
+            path.write_text(content, encoding="utf-8")
+    clusters_dir = root / "profile" / "clusters"
+    clusters_dir.mkdir(parents=True, exist_ok=True)
+    for name, content in PROFILE_CLUSTER_FILES.items():
+        path = clusters_dir / name
         if not path.exists():
             path.write_text(content, encoding="utf-8")
     ideas_path = root / "inbox" / "ideas.md"

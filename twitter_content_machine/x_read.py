@@ -25,9 +25,95 @@ class XReadProvider:
     def get_post_thread(self, url_or_id: str) -> list[dict[str, str]]:
         return []
 
+    def get_user_following(self, username: str, limit: int) -> list[dict]:
+        return []
+
+    def get_user_followers(self, username: str, limit: int) -> list[dict]:
+        return []
+
+    def search_users(self, query: str, limit: int) -> list[dict]:
+        return []
+
+    def search_recent_posts(self, query: str, limit: int) -> list[dict]:
+        return []
+
 
 class NoneProvider(XReadProvider):
     pass
+
+
+class XAPIProvider(XReadProvider):
+    def __init__(self, token: str, config: Config | None = None) -> None:
+        self.token = token
+        self.config = config or load_config()
+        self.errors: list[str] = []
+
+    def get_user_recent_posts(self, username: str, limit: int) -> list[dict[str, str]]:
+        user_id = self._lookup_user_id(username)
+        if not user_id:
+            return []
+        posts, _message = _fetch_timeline(user_id, self.token, self.config, limit)
+        return [
+            {
+                **item,
+                "author_username": normalize_username(username),
+                "url": f"https://x.com/{normalize_username(username)}/status/{item.get('id', '')}",
+            }
+            for item in posts
+        ]
+
+    def get_user_following(self, username: str, limit: int) -> list[dict]:
+        user_id = self._lookup_user_id(username)
+        if not user_id:
+            return []
+        payload = self._request_json(_following_url(user_id, limit), "get_user_following")
+        return list(payload.get("data") or [])
+
+    def get_user_followers(self, username: str, limit: int) -> list[dict]:
+        user_id = self._lookup_user_id(username)
+        if not user_id:
+            return []
+        payload = self._request_json(_followers_url(user_id, limit), "get_user_followers")
+        return list(payload.get("data") or [])
+
+    def search_users(self, query: str, limit: int) -> list[dict]:
+        payload = self._request_json(_user_search_url(query, limit), "search_users")
+        return list(payload.get("data") or [])
+
+    def search_recent_posts(self, query: str, limit: int) -> list[dict]:
+        payload = self._request_json(_recent_search_url(query, limit), "search_recent_posts")
+        users = {
+            str(user.get("id") or ""): user
+            for user in (payload.get("includes") or {}).get("users", [])
+        }
+        posts = []
+        for item in payload.get("data") or []:
+            author = users.get(str(item.get("author_id") or ""), {})
+            username = str(author.get("username") or item.get("username") or "")
+            posts.append(
+                {
+                    **item,
+                    "author_username": username,
+                    "author_name": str(author.get("name") or ""),
+                    "author_description": str(author.get("description") or ""),
+                    "url": f"https://x.com/{username}/status/{item.get('id', '')}" if username else "",
+                }
+            )
+        return posts
+
+    def _lookup_user_id(self, username: str) -> str | None:
+        payload = self._request_json(_username_url(username), "lookup_user")
+        data = payload.get("data") or {}
+        return str(data.get("id") or "") or None
+
+    def _request_json(self, url: str, action: str) -> dict:
+        try:
+            return _request_json(url, self.token)
+        except error.HTTPError as exc:
+            self.errors.append(f"{action}: HTTP {exc.code} {exc.reason}")
+        except Exception as exc:
+            self.errors.append(f"{action}: {type(exc).__name__}: {exc}")
+        return {}
 
 
 def _bearer_token() -> str:
@@ -39,6 +125,13 @@ def _request_json(url: str, token: str, timeout: int = 30) -> dict:
     with request.urlopen(req, timeout=timeout) as resp:  # nosec - URL is fixed API base.
         data = resp.read()
     return json.loads(data.decode("utf-8"))
+
+
+def _safe_request_json(url: str, token: str) -> dict:
+    try:
+        return _request_json(url, token)
+    except Exception:
+        return {}
 
 
 def _timeline_url(user_id: str, config: Config, limit: int, pagination_token: str | None = None) -> str:
@@ -62,6 +155,54 @@ def _username_url(username: str) -> str:
     clean = normalize_username(username)
     params = parse.urlencode({"user.fields": "id,username,name"})
     return f"{API_BASE}/users/by/username/{parse.quote(clean)}?{params}"
+
+
+def _user_fields() -> str:
+    return "id,username,name,description,public_metrics,verified,protected,created_at"
+
+
+def _post_fields() -> str:
+    return "id,text,created_at,author_id,conversation_id,public_metrics,referenced_tweets,lang"
+
+
+def _following_url(user_id: str, limit: int, pagination_token: str | None = None) -> str:
+    params: dict[str, str | int] = {
+        "max_results": max(1, min(1000, limit)),
+        "user.fields": _user_fields(),
+    }
+    if pagination_token:
+        params["pagination_token"] = pagination_token
+    return f"{API_BASE}/users/{parse.quote(user_id)}/following?{parse.urlencode(params)}"
+
+
+def _followers_url(user_id: str, limit: int, pagination_token: str | None = None) -> str:
+    params: dict[str, str | int] = {
+        "max_results": max(1, min(1000, limit)),
+        "user.fields": _user_fields(),
+    }
+    if pagination_token:
+        params["pagination_token"] = pagination_token
+    return f"{API_BASE}/users/{parse.quote(user_id)}/followers?{parse.urlencode(params)}"
+
+
+def _user_search_url(query: str, limit: int) -> str:
+    params: dict[str, str | int] = {
+        "query": query,
+        "max_results": max(1, min(100, limit)),
+        "user.fields": _user_fields(),
+    }
+    return f"{API_BASE}/users/search?{parse.urlencode(params)}"
+
+
+def _recent_search_url(query: str, limit: int) -> str:
+    params: dict[str, str | int] = {
+        "query": query,
+        "max_results": max(10, min(100, limit)),
+        "tweet.fields": _post_fields(),
+        "expansions": "author_id",
+        "user.fields": _user_fields(),
+    }
+    return f"{API_BASE}/tweets/search/recent?{parse.urlencode(params)}"
 
 
 def normalize_username(value: str) -> str:
@@ -89,7 +230,58 @@ def get_provider() -> XReadProvider:
         return NoneProvider()
     if config.x_provider == "x_api" and not _bearer_token():
         return NoneProvider()
+    if config.x_provider == "x_api":
+        return XAPIProvider(_bearer_token(), config)
     return NoneProvider()
+
+
+def x_read_setup_problem() -> str | None:
+    workspace = ensure_workspace()
+    config = load_config(workspace.root)
+    config_path = workspace.root / "config.toml"
+    if config.x_provider != "x_api":
+        return f"""live X read provider is not configured.
+
+Current:
+- config: {config_path}
+- [x].provider = "{config.x_provider}"
+
+To enable read-only X scan:
+1. Edit {config_path}
+
+[x]
+provider = "x_api"
+readonly = true
+
+2. Set a read-only bearer token in this PowerShell session:
+
+$env:X_BEARER_TOKEN = "<your X API bearer token>"
+
+3. Re-run:
+
+tw graph-scan --cluster quant --limit 30 --posts 50
+
+No X write actions are used."""
+    if not config.x_readonly:
+        return f"""Refusing live X scan because [x].readonly = false in {config_path}.
+
+Set:
+
+[x]
+readonly = true
+"""
+    if not _bearer_token():
+        return f"""live X read provider is configured, but X_BEARER_TOKEN is missing.
+
+Set a read-only bearer token in this PowerShell session:
+
+$env:X_BEARER_TOKEN = "<your X API bearer token>"
+
+Then re-run:
+
+tw graph-scan --cluster quant --limit 30 --posts 50
+"""
+    return None
 
 
 def _fetch_timeline(user_id: str, token: str, config: Config, limit: int) -> tuple[list[dict], str | None]:

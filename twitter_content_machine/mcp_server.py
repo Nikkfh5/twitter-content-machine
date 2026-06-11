@@ -7,6 +7,7 @@ from .algorithm_review import write_algorithm_review, write_all_algorithm_layers
 from .db import search_memory
 from .drafting import create_draft, get_draft, refine_draft, review_draft, set_draft_status
 from .identity_style import DEFAULT_IDENTITY_PROFILE, style_build, style_curate, style_learn, style_review, write_identity_artifacts
+from .outcomes import list_outcomes, record_outcome
 from .project_context import detect_project, refresh_project_context
 from .telegram_import import import_telegram
 from .x_read import sync_posted
@@ -128,6 +129,24 @@ def tw_sync_posted_readonly() -> dict[str, str | int]:
     return {"imported": result.imported, "message": result.message}
 
 
+def tw_record_outcome(
+    draft_id: str,
+    handle: str,
+    action: str,
+    why: str,
+    cluster: str = "",
+    relationship: str = "",
+    quality_note: str = "",
+    follow_up_needed: bool = False,
+) -> dict[str, str]:
+    result = record_outcome(draft_id, handle, action, why, cluster, relationship, quality_note, follow_up_needed)
+    return {"outcome_id": result.id, "artifact_path": str(result.artifact_path)}
+
+
+def tw_list_outcomes(draft_id: str | None = None, limit: int = 20) -> list[dict[str, object]]:
+    return list_outcomes(draft_id=draft_id, limit=limit)
+
+
 TOOLS: dict[str, Callable[..., Any]] = {
     "tw_search_memory": tw_search_memory,
     "tw_get_project_context": tw_get_project_context,
@@ -146,6 +165,8 @@ TOOLS: dict[str, Callable[..., Any]] = {
     "tw_style_curate": tw_style_curate,
     "tw_mark_ready": tw_mark_ready,
     "tw_mark_posted": tw_mark_posted,
+    "tw_record_outcome": tw_record_outcome,
+    "tw_list_outcomes": tw_list_outcomes,
     "tw_sync_posted_readonly": tw_sync_posted_readonly,
 }
 

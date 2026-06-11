@@ -7,6 +7,7 @@ from typing import Any
 
 from .config import Config
 from .db import search_memory
+from .format_decision import format_decision_brief
 from .models import Project, ProjectContext
 from .utils import iso_now
 from .workspace import read_profile
@@ -47,6 +48,7 @@ def build_context_bundle(
     config: Config,
     source_url: str | None = None,
     identity_context: str = "",
+    format_decision: dict[str, object] | None = None,
 ) -> BundlePaths:
     profile = read_profile(config.root)
     source_manifest: list[dict[str, Any]] = []
@@ -87,6 +89,7 @@ def build_context_bundle(
         },
         "related_memory": memory,
         "identity_style": identity_context,
+        "format_decision": format_decision or {},
         "source_context": {"source_url": source_url or ""},
         "drafting_requirements": {
             "schema": "Return strict JSON matching 14_llm_request.md",
@@ -132,6 +135,8 @@ def _bundle_markdown(bundle: dict[str, Any]) -> str:
             json.dumps(bundle["related_memory"], indent=2, ensure_ascii=False),
             "## Identity Style",
             str(bundle["identity_style"]),
+            "## Format Decision",
+            format_decision_brief(bundle.get("format_decision") or None),
             "## Drafting Requirements",
             json.dumps(bundle["drafting_requirements"], indent=2, ensure_ascii=False),
             "## Source Manifest",
@@ -156,9 +161,12 @@ def _llm_request(bundle: dict[str, Any]) -> str:
     account = bundle["account_positioning"]
     project = bundle["project_context"]
     identity = str(bundle.get("identity_style") or "")
+    format_decision = bundle.get("format_decision") or {}
+    format_decision_text = format_decision_brief(format_decision if isinstance(format_decision, dict) else None)
     output_language = "English" if str(task.get("language", "en")).lower() != "ru" else "Russian"
     draft_type = str(task.get("draft_type", "adaptive"))
-    length_rules = _length_rules(draft_type)
+    effective_format = str(format_decision.get("best_format", draft_type)) if isinstance(format_decision, dict) else draft_type
+    length_rules = _length_rules(effective_format)
     return f"""# LLM Draft Request
 
 Generate X/Twitter draft text from this compact request.
@@ -166,6 +174,7 @@ Generate X/Twitter draft text from this compact request.
 Full inspectable context is available in this draft folder:
 - 13_context_bundle.md
 - 13_context_bundle.json
+- FORMAT_DECISION.md
 
 Use the compact context below first. Read full bundle files only if the compact context is insufficient.
 
@@ -238,12 +247,17 @@ Algorithm principles:
 
 {_clip(identity, 2200)}
 
+## Format Decision
+
+{_clip(format_decision_text, 1400)}
+
 ## Output Requirements
 
 - Variant A should be direct/raw.
 - Variant B should be clearer/structured.
 - Variant C should be sharper, but not fake-contrarian.
 - Final candidate should be usable as a first post about the project and written in {output_language}.
+- Chosen format: {effective_format}.
 - Do not make the post artificially short.
 - {length_rules}
 - Keep uncertainty if the project is just starting.

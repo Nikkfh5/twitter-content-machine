@@ -65,6 +65,8 @@ Progress:
 - 2026-06-08: implemented status-aware repeated-post risk. Captured ideas and
   ordinary `draft` drafts no longer count as repeated-post risk; `ready`,
   `posted`, and imported own posts still count.
+- 2026-06-09: verified this behavior as roadmap item 1 during the 1/2/3/5
+  implementation pass.
 
 Why this is strong:
 - It stops useful iteration from being punished.
@@ -126,6 +128,8 @@ Problem:
 Current state:
 - `tw draft "..."` now defaults to `adaptive`.
 - `--short` remains available when the user explicitly wants compact output.
+- 2026-06-09: `tw draft` now writes `FORMAT_DECISION.md` and stores the
+  format decision in `13_context_bundle.json` / `14_llm_request.md`.
 
 Target behavior:
 - The model should choose the best narrative form:
@@ -156,6 +160,20 @@ Suggested design:
 - If it has one compact observation, use short post.
 - If it has rich context but not enough independent parts for a thread, use
   adaptive single post with 2-5 short paragraphs.
+
+Implemented MVP:
+- `FORMAT_DECISION.md` records:
+  - requested format
+  - best format
+  - decision source
+  - content density
+  - target audience
+  - expected primary action
+  - length range
+  - why other formats were not selected
+- Explicit user flags such as `--short` are recorded as
+  `decision_source: explicit-user-format`.
+- Adaptive choices are recorded as `decision_source: adaptive-heuristic`.
 
 Why this is strong:
 - It preserves good ideas instead of compressing them.
@@ -202,6 +220,12 @@ Important design rule:
 - Keep advanced flags for debugging, but hide them from daily flow.
 - The user should not need `--llm`, `--model`, `--algo-aware`, `--identity-style`,
   or draft IDs in ordinary use.
+
+Implemented MVP:
+- `tw "<dictated instruction>"` now normalizes to `tw draft "<dictated instruction>"`
+  when the first token is not a known command.
+- Single-token unknown commands still error instead of silently becoming drafts.
+- Advanced flags remain on `tw draft` for debug use.
 
 Draft folder should become the native working unit:
 - `TASK.md`
@@ -261,6 +285,11 @@ Possible implementation stages:
      `tw outcome latest --handle @x --action reply --why "quant dev with relevant benchmark work"`
    - Store in SQLite and Markdown.
    - This is immediately useful and does not depend on X API limits.
+   - 2026-06-09 MVP implemented:
+     - `tw outcome latest --handle ... --action ... --why ...`
+     - `tw outcomes`
+     - SQLite tables: `accounts`, `high_value_interactions`
+     - draft artifact: `20_high_value_interactions.md`
 
 2. Read-only sync
    - Use X read-only endpoints where available.
@@ -300,11 +329,11 @@ Open questions:
 
 ## Suggested Build Order
 
-1. Fix repeated-idea lineage in algorithm review.
-2. Replace shallow risk detector with evidence-based detector.
-3. Add explicit `format_decision` artifact and improve adaptive format choice.
-4. Design `tw "<dictation>"` personal-scribe UX.
-5. Add manual high-value interaction tracking.
+1. Fix repeated-idea lineage in algorithm review. Completed 2026-06-08, verified 2026-06-09.
+2. Add explicit `format_decision` artifact and improve adaptive format choice. Completed MVP 2026-06-09.
+3. Design `tw "<dictation>"` personal-scribe UX. Completed MVP 2026-06-09.
+4. Add manual high-value interaction tracking. Completed MVP 2026-06-09.
+5. Replace shallow risk detector with evidence-based detector.
 6. Add read-only X enrichment where API access allows.
 7. Feed outcome analytics back into draft review and format selection.
 

@@ -34,6 +34,8 @@ Architecture:
 - Native content Codex sessions: `twitter_content_machine/codex_session.py`
 - X read/analysis layer: `twitter_content_machine/x_read.py`,
   `twitter_content_machine/x_analysis.py`
+- Graph bootstrap layer: `twitter_content_machine/bootstrap.py`,
+  `twitter_content_machine/commands/bootstrap_ops.py`
 
 ## Critical: two AGENTS contexts
 
@@ -96,6 +98,12 @@ CLI workflow:
 - Project context: `tw refresh-context --force`
 - X/read-only: `tw x-read <user-or-url>`, `tw sync-posted`
 - X analysis: `tw analyze-own --sync`, `tw analyze-peer <user-or-url> --limit 100`
+- Graph bootstrap: `tw bootstrap --days 14`, `tw today --refresh`,
+  `tw today --refresh --live-x`, `tw bootstrap-plan --days 14`,
+  `tw graph-scan --cluster quant --limit 30 --posts 50`,
+  `tw follow-seed --cluster quant`, `tw target-accounts add @handle --cluster quant`,
+  `tw x-digest --cluster quant --ru`, `tw quote-candidates latest`,
+  `tw draft-from-digest latest --short`, `tw graph-review`, `tw weekly-review`
 - Status bookkeeping only: prefer `tw ready`, `tw reject`,
   `tw posted --url <url>`; `mark-ready` and `mark-posted` are legacy aliases.
 - `style-curate` currently writes a Markdown curation queue, not a full
@@ -118,6 +126,8 @@ Draft artifacts:
   `08_media_plan.md`, and `09_distribution_plan.md`.
 - Identity-style commands append `10_identity_style_review.md`,
   `11_examples_used.md`, and `12_risk_flags.md`.
+- Bootstrap-enabled drafts append `17_distribution_bootstrap.md`; this is a
+  manual distribution note, not a posting instruction.
 - Treat generation as workshop output: variants, critique, anti-GPT pass, final candidate.
 - Default LLM config is `mode = "auto"`, `model = "gpt-5.5"`,
   `reasoning_effort = "xhigh"`, `speed = "fast"`, `default_language = "en"`.
@@ -142,6 +152,9 @@ Draft artifacts:
 - `tw style-gold-import` copies `style_gold.md` and `content_gold.md` into
   `~/twitter-system/profile/`. Treat these as strong style/structure
   references, not as permission to reuse old crypto shilling or advice.
+- Graph bootstrap artifacts live under `~/twitter-system/graph/`:
+  `target_accounts/`, `follow_queue/`, `digests/`, `plans/`, `scans/`, and `reports/`.
+  Follow queues and quote candidates are suggestions for human action only.
 
 Project context behavior:
 - `tw` detects the git root with `git rev-parse --show-toplevel`; fallback is cwd.
@@ -160,6 +173,28 @@ MCP tools:
   `tw_style_review`, `tw_sync_posted_readonly`.
 - `tw_mark_posted` is local status bookkeeping after a human manually posts.
 - There must be no publish/post-to-X tool.
+
+Graph Bootstrap Agent:
+- Mission: build the first relevant social graph for a cold X account without
+  spam, mass automation, or heavy social interaction.
+- Default mode: `low_social` + `cold_start`.
+- It may create target-account maps, manual follow queues, digests, quote
+  candidates, daily plans, daily operator packets, and logs.
+- It must never auto-follow, auto-like, auto-reply, auto-quote, auto-repost, or
+  auto-publish.
+- Do not add a CLI command named `follow`; `follow-seed` creates a manual queue
+  only.
+- In `low_social`, do not recommend mandatory replies, manual timeline reading,
+  DMs, mass tagging, engagement bait, or spam patterns.
+- `tw log-action` records what the human did; it is local bookkeeping only.
+- `tw bootstrap --days 14` should create a personalized strategy from profile
+  files, recent drafts/posts, target clusters, and account state. `tw today
+  --refresh` is the daily operator command; it should refresh from local
+  read-only/cached X sources and output concrete manual actions for that day.
+- `tw graph-scan` and `tw today --refresh --live-x` may use read-only X API
+  endpoints for user search, recent post search, and following/follower lookup.
+  They must only write local scan reports, source-cache rows, target-account
+  rows, and manual queues.
 
 Algorithm-aware review:
 - Treat X-fit as a heuristic review layer, not a real viral score or exact

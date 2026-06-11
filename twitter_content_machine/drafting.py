@@ -9,6 +9,7 @@ from .db import connect_db, search_memory, upsert_fts
 from .draft_artifacts import DRAFT_FILES, build_brief, build_prompt, draft_id_for_text
 from .draft_fallbacks import generate_variants
 from .draft_status import get_draft, refine_draft, review_draft, set_draft_status
+from .format_decision import decide_format, format_decision_brief, write_format_decision
 from .generation_workspace import prepare_generation_workspace
 from .identity_style import identity_brief_context, write_identity_artifacts
 from .llm import resolve_llm_mode, run_llm
@@ -57,13 +58,20 @@ def create_draft(
     now = get_now()
     folder = workspace.root / "drafts" / f"{now:%Y}" / f"{now:%m}" / draft_id
     folder.mkdir(parents=True, exist_ok=False)
+    format_decision = decide_format(safe_text, draft_type, context.summary, url)
+    write_format_decision(folder / "FORMAT_DECISION.md", format_decision)
     profile = read_profile(workspace.root)
     identity_context = (
         identity_brief_context(identity_style_profile, identity_strength)
         if identity_style_profile
         else ""
     )
-    brief = build_brief(safe_text, draft_type, context.summary + "\n\n" + identity_context, memory)
+    brief = build_brief(
+        safe_text,
+        draft_type,
+        context.summary + "\n\n" + format_decision_brief(format_decision) + "\n\n" + identity_context,
+        memory,
+    )
     a, b, c = generate_variants(safe_text, draft_type, identity_style_active=bool(identity_style_profile))
     variants = f"""# Variants
 
@@ -116,6 +124,7 @@ folder_path: {folder}
 autopublish: false
 identity_style: {identity_style_profile or ''}
 identity_strength: {identity_strength if identity_style_profile else ''}
+format_decision: {format_decision.best_format}
 """,
     }
     for name in DRAFT_FILES:
@@ -164,6 +173,7 @@ identity_strength: {identity_strength if identity_style_profile else ''}
         config=config,
         source_url=url,
         identity_context=identity_context,
+        format_decision=format_decision.to_dict(),
     )
     prepare_generation_workspace(folder, config)
     selected_mode = resolve_llm_mode(llm_mode, config, no_llm=no_llm or context_only)
@@ -213,6 +223,10 @@ identity_strength: {identity_strength if identity_style_profile else ''}
         )
         if must_have_llm and not result.ok:
             raise RuntimeError(f"Codex generation failed: {result.message}")
+    if config.bootstrap_enabled:
+        from .bootstrap import write_distribution_bootstrap_artifact
+
+        write_distribution_bootstrap_artifact(folder, config, draft_type)
     return DraftResult(draft_id, folder, final)
 
 

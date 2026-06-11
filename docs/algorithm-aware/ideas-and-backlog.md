@@ -141,6 +141,14 @@ Why strong:
 Why postponed:
 - useful after enough drafts/posts exist
 
+Related completed MVP:
+- `tw outcome` and `tw outcomes` were added on 2026-06-09 as the manual-first
+  outcome layer from the product roadmap.
+- This is not the full `tw experiment-log` yet.
+- It records high-value interactions per draft and writes
+  `20_high_value_interactions.md`.
+- It creates the local data needed before format/outcome history becomes useful.
+
 ### `tw anti-spam latest`
 
 Dedicated checker for repeated idea, muted-keyword risk, crypto-shill risk,

@@ -99,6 +99,61 @@ def test_review_layers_default_to_current_draft(tw_root: Path, tmp_path: Path) -
     assert (draft.folder / "08_media_plan.md").exists()
     assert (draft.folder / "09_distribution_plan.md").exists()
 
+def test_bare_tw_text_creates_adaptive_draft(
+    tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = tmp_path / "bare-scribe"
+    project.mkdir()
+    ensure_workspace()
+    payload = {
+        "variants": [
+            {
+                "id": "A",
+                "name": "direct_raw",
+                "text": "Validation failure note.",
+                "intent": "dwell",
+                "why_it_might_work": "specific",
+                "risks": [],
+            }
+        ],
+        "critique": {
+            "real_point": "ok",
+            "too_generic": False,
+            "overclaim_risk": "low",
+            "financial_advice_risk": "low",
+            "confidentiality_risk": "low",
+            "repetition_risk": "low",
+            "identity_style_risk": "low",
+            "algorithm_fit": "ok",
+        },
+        "selected_variant_id": "A",
+        "final_candidate": "Validation failure note.",
+        "media_suggestion": {"use_media": False, "type": "none", "reason": "none"},
+        "manual_notes": [],
+    }
+
+    class Completed:
+        returncode = 0
+        stdout = json.dumps(payload)
+        stderr = ""
+
+    monkeypatch.setattr("twitter_content_machine.llm.shutil.which", lambda command: "C:/bin/codex.exe")
+    monkeypatch.setattr(
+        "twitter_content_machine.llm.detect_codex_capabilities",
+        lambda command="codex": {"exec": True, "cd": True, "model": True, "config": True},
+    )
+    monkeypatch.setattr("twitter_content_machine.llm.subprocess.run", lambda command, **kwargs: Completed())
+
+    assert run_cli(["I want to write about a validation failure in this project"], cwd=project) == 0
+    output = capsys.readouterr().out
+
+    assert "Validation failure note." in output
+    draft_id = resolve_draft_id("latest")
+    with connect_db() as conn:
+        row = conn.execute("select type, final_text from drafts where id = ?", (draft_id,)).fetchone()
+    assert row["type"] == "adaptive"
+    assert row["final_text"] == "Validation failure note."
+
 def test_edit_current_draft_uses_codex_and_updates_final_candidate(
     tw_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

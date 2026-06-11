@@ -36,6 +36,18 @@ readonly = true
 max_import = 200
 exclude_replies = false
 exclude_retweets = true
+
+[bootstrap]
+enabled = true
+account_stage = "cold_start" # cold_start | warming | active
+interaction_mode = "low_social" # low_social | normal | reply_first
+manual_social_budget_minutes = 10
+plan_days = 14
+daily_follow_budget = 15
+max_daily_quote_candidates = 5
+max_daily_drafts = 3
+default_digest_language = "ru"
+default_clusters = ["quant", "systems", "ml_infra", "ai_agents", "builders"]
 """
 
 
@@ -66,6 +78,16 @@ class Config:
     x_max_import: int
     x_exclude_replies: bool
     x_exclude_retweets: bool
+    bootstrap_enabled: bool
+    bootstrap_account_stage: str
+    bootstrap_interaction_mode: str
+    bootstrap_manual_social_budget_minutes: int
+    bootstrap_plan_days: int
+    bootstrap_daily_follow_budget: int
+    bootstrap_max_daily_quote_candidates: int
+    bootstrap_max_daily_drafts: int
+    bootstrap_default_digest_language: str
+    bootstrap_default_clusters: list[str]
 
 
 def default_root() -> Path:
@@ -83,6 +105,7 @@ def load_config(root: Path | None = None) -> Config:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     x = data.get("x", {})
     llm = data.get("llm", {})
+    bootstrap = data.get("bootstrap", {})
     legacy_mode = data.get("llm_mode", "auto")
     raw_llm_mode = str(llm.get("mode", legacy_mode))
     llm_mode = raw_llm_mode if raw_llm_mode in {"auto", "codex"} else "auto"
@@ -112,6 +135,31 @@ def load_config(root: Path | None = None) -> Config:
         x_max_import=int(x.get("max_import", 200)),
         x_exclude_replies=bool(x.get("exclude_replies", False)),
         x_exclude_retweets=bool(x.get("exclude_retweets", True)),
+        bootstrap_enabled=bool(bootstrap.get("enabled", True)),
+        bootstrap_account_stage=_choice(
+            str(bootstrap.get("account_stage", "cold_start")),
+            {"cold_start", "warming", "active"},
+            "cold_start",
+        ),
+        bootstrap_interaction_mode=_choice(
+            str(bootstrap.get("interaction_mode", "low_social")),
+            {"low_social", "normal", "reply_first"},
+            "low_social",
+        ),
+        bootstrap_manual_social_budget_minutes=int(bootstrap.get("manual_social_budget_minutes", 10)),
+        bootstrap_plan_days=int(bootstrap.get("plan_days", 14)),
+        bootstrap_daily_follow_budget=int(bootstrap.get("daily_follow_budget", 15)),
+        bootstrap_max_daily_quote_candidates=int(bootstrap.get("max_daily_quote_candidates", 5)),
+        bootstrap_max_daily_drafts=int(bootstrap.get("max_daily_drafts", 3)),
+        bootstrap_default_digest_language=_normalize_default_language(
+            str(bootstrap.get("default_digest_language", "ru"))
+        ),
+        bootstrap_default_clusters=_string_list(
+            bootstrap.get(
+                "default_clusters",
+                ["quant", "systems", "ml_infra", "ai_agents", "builders"],
+            )
+        ),
     )
 
 
@@ -120,6 +168,18 @@ def _normalize_default_language(value: str) -> str:
     if normalized == "ru":
         return "ru"
     return "en"
+
+
+def _choice(value: str, allowed: set[str], default: str) -> str:
+    normalized = value.strip().lower()
+    return normalized if normalized in allowed else default
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return ["quant", "systems", "ml_infra", "ai_agents", "builders"]
+    result = [str(item).strip() for item in value if str(item).strip()]
+    return result or ["quant", "systems", "ml_infra", "ai_agents", "builders"]
 
 
 def _positive_float(value: Any, default: float) -> float:

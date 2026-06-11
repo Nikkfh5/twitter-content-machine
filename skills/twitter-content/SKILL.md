@@ -24,6 +24,10 @@ Default behavior:
 14. Run identity/style review if identity-style is active.
 15. Keep all source/context files for debugging.
 
+For graph bootstrap work, use the CLI as a strategy/operator layer. The
+bootstrap agent creates manual queues, digests, quote candidates, and daily
+actions. It does not perform social actions.
+
 If the user did not specify format, ask or infer one of:
 - short
 - thread
@@ -47,6 +51,9 @@ Never:
 - create files in the current project unless explicitly asked
 - imitate forwarded Telegram posts as the user's style
 - manually write a tweet if the CLI can create a draft
+- auto-follow, auto-like, auto-reply, auto-quote, auto-repost, or auto-publish
+- turn `follow-seed` into an X follow action
+- make replies mandatory in low_social bootstrap mode
 
 ## Commands
 
@@ -84,6 +91,20 @@ Never:
 - Analyze own posts: `tw analyze-own --sync`
 - Import peer posts read-only: `tw x-read @handle --limit 100`
 - Analyze peer posts: `tw analyze-peer @handle --limit 100`
+- Create 14-day bootstrap plan: `tw bootstrap --days 14`
+- Static plan command alias: `tw bootstrap-plan --days 14`
+- Create today's daily operator packet: `tw today --refresh`
+- Create today's packet with live read-only X scan: `tw today --refresh --live-x`
+- Show today's stored bootstrap actions: `tw today`
+- Add target account: `tw target-accounts add @handle --cluster quant --note "..."`
+- Import target accounts: `tw target-accounts import accounts.csv --cluster quant`
+- Build manual follow queue: `tw follow-seed --cluster quant --limit 30`
+- Run read-only graph scan: `tw graph-scan --cluster quant --limit 30 --posts 50`
+- Create Russian digest from cached/read-only sources: `tw x-digest --cluster quant --limit 50 --ru`
+- Show quote candidates: `tw quote-candidates latest`
+- Draft from digest: `tw draft-from-digest latest --short`
+- Review graph state: `tw graph-review`
+- Weekly bootstrap review: `tw weekly-review`
 
 If `tw` is unavailable, tell the user to install from the repo with:
 
@@ -105,6 +126,10 @@ Expected generated files:
 - `.codex_home/AGENTS.md`
 - active draft pointer: `~/twitter-system/state/current_draft.txt`
 - edit artifacts: `17_edit_request.md`, `18_edit_raw_output.md`, `19_edit_parse_report.md`, and `revisions/*.md`
+- bootstrap distribution artifact: `17_distribution_bootstrap.md`
+- graph bootstrap folders: `~/twitter-system/graph/plans/`,
+  `~/twitter-system/graph/follow_queue/`, `~/twitter-system/graph/digests/`,
+  and `~/twitter-system/graph/scans/`
 - native content session folder: `~/twitter-system/codex_sessions/<session_id>/`
 - content session files: `AGENTS.md`, `TASK.md`, `INPUT.md`, `CONTEXT_BUNDLE.md`, `OUTPUT_SCHEMA.md`, `output/`, `.codex_home/AGENTS.md`
 

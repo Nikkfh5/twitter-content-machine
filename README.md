@@ -46,6 +46,14 @@ tw codex --prepare --thread
 tw codex --run
 tw sync-posted
 tw analyze-own --sync
+tw bootstrap --days 14
+tw today --refresh
+tw today --refresh --live-x
+tw graph-scan --cluster quant --limit 30 --posts 50
+tw follow-seed --cluster quant
+tw x-digest --cluster quant --limit 50 --ru
+tw quote-candidates latest
+tw graph-review
 ```
 
 `tw draft "..."` makes the new draft active. Most draft commands can omit
@@ -78,6 +86,84 @@ Top-level product roadmap:
 docs/product-roadmap.md
 docs/product-roadmap-scoring.md
 ```
+
+## Graph Bootstrap Agent
+
+Use this for a cold or near-zero X account when the goal is to build the first
+relevant graph, not to automate engagement.
+
+The agent creates strategy, queues, digests, and daily manual actions. It never
+follows, likes, replies, quotes, reposts, or publishes for you.
+
+Start a 14-day low-social plan:
+
+```powershell
+tw bootstrap --days 14
+tw today --refresh
+tw today --refresh --live-x
+```
+
+Add or import target accounts, then build a manual follow queue:
+
+```powershell
+tw target-accounts add @some_handle --cluster quant --note "market microstructure"
+tw target-accounts import accounts.csv --cluster systems
+tw target-accounts list --cluster quant
+tw follow-seed --cluster quant --limit 30
+```
+
+Digest read-only/cached source posts without reading the feed manually:
+
+```powershell
+tw x-read @some_handle --limit 100
+tw graph-scan --cluster quant --limit 30 --posts 50
+tw x-digest --cluster quant --limit 50 --ru
+tw quote-candidates latest
+tw draft-from-digest latest --short
+```
+
+Daily operating loop:
+
+```powershell
+tw today --refresh
+tw today --refresh --live-x
+tw log-action <action_id> --done --note "followed manually"
+tw graph-review
+tw weekly-review
+```
+
+Outputs live under:
+
+```text
+~/twitter-system/graph/
+  target_accounts/
+  follow_queue/
+  digests/
+  plans/
+  scans/
+  reports/
+```
+
+Each plan folder includes:
+
+```text
+plan.md
+plan.json
+personal_strategy.md
+account_state.md
+graph_strategy.md
+daily/day_01.md
+daily/day_01_operator.md # created by tw today --refresh
+```
+
+`tw graph-scan` and `tw today --refresh --live-x` use the configured read-only
+X provider when available. They may call read endpoints for user search, recent
+post search, and seed-account following lists. They only write local files and
+manual queue rows.
+
+Success for the first two weeks is graph clarity: relevant follows, cluster
+coverage, useful digests, and a few seed/build notes. Likes are not the primary
+metric.
 
 ## Active Draft UX
 
@@ -182,6 +268,12 @@ This writes:
     x_posts/
     telegram/
     notes/
+  graph/
+    target_accounts/
+    follow_queue/
+    digests/
+    plans/
+    reports/
   db/content.sqlite
   logs/
 ```
@@ -218,6 +310,7 @@ Files:
 14_llm_request.md
 15_llm_raw_output.md       # when an LLM is attempted
 16_llm_parse_report.md
+17_distribution_bootstrap.md # when bootstrap mode is enabled
 AGENTS.override.md
 .codex_home/AGENTS.md     # when isolated Codex home is enabled
 prompt_to_codex.md

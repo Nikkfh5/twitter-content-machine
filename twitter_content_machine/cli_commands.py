@@ -18,6 +18,19 @@ from .commands.core import (
     list_drafts,
     save_idea,
 )
+from .commands.bootstrap_ops import (
+    _cmd_bootstrap_plan,
+    _cmd_draft_from_digest,
+    _cmd_follow_seed,
+    _cmd_graph_scan,
+    _cmd_graph_review,
+    _cmd_log_action,
+    _cmd_quote_candidates,
+    _cmd_target_accounts,
+    _cmd_today,
+    _cmd_weekly_review,
+    _cmd_x_digest,
+)
 from .commands.draft_ops import (
     _cmd_algo,
     _cmd_algo_review,
@@ -36,6 +49,10 @@ from .commands.io_ops import (
     _cmd_search,
     _cmd_sync_posted,
     _cmd_x_read,
+)
+from .commands.outcome_ops import (
+    _cmd_outcome,
+    _cmd_outcomes,
 )
 from .commands.style_ops import (
     DEFAULT_IDENTITY_PROFILE,
